@@ -449,6 +449,7 @@ async function cargarProductos(search = '', categoria = '') {
                     <div class="producto-info">
                         <div class="producto-name">${p.nombre}</div>
                         <div class="producto-detail">${p.categoria} | ${p.unidad} | Mín: ${p.stock_minimo}</div>
+                        ${p.notas ? `<div class="producto-notas">${p.notas.replace(/Creado por:/g, '👤')}</div>` : ''}
                     </div>
                     <div class="producto-stock">
                         <div class="producto-stock-value" style="color: ${esBajo ? 'var(--red)' : 'var(--green)'}">${p.stock_actual}</div>
@@ -479,7 +480,11 @@ async function guardarProducto(e) {
 
     try {
         if (id) {
-            await sb('productos', 'PATCH', { nombre, unidad, stock_minimo: stockMin, categoria, area: areaActual }, `?id=eq.${id}`);
+            const prev = await sb('productos', 'GET', null, `?id=eq.${id}&select=notas`);
+            const prevNotas = prev?.[0]?.notas || '';
+            const editLine = `Editado por: ${usuarioActual || 'Anónimo'} - ${new Date().toLocaleDateString('es-CL')}`;
+            const nuevasNotas = prevNotas ? `${prevNotas} | ${editLine}` : editLine;
+            await sb('productos', 'PATCH', { nombre, unidad, stock_minimo: stockMin, categoria, area: areaActual, notas: nuevasNotas }, `?id=eq.${id}`);
             showToast('Producto actualizado');
         } else {
             const notas = `Creado por: ${usuarioActual || 'Anónimo'} - ${new Date().toLocaleDateString('es-CL')}`;
@@ -561,7 +566,7 @@ async function cargarMovimientos(search = '') {
                     <div class="movimiento-icon ${esEntrada ? 'entrada' : 'salida'}">${esEntrada ? '📥' : '📤'}</div>
                     <div class="movimiento-info">
                         <div class="movimiento-producto">${nombre}</div>
-                        <div class="movimiento-detail">${m.fecha} ${m.observaciones ? '- ' + m.observaciones : ''}</div>
+                        <div class="movimiento-detail">${m.fecha} · 👤 ${m.usuario || 'Anónimo'} ${m.observaciones ? '· ' + m.observaciones : ''}</div>
                     </div>
                     <div class="movimiento-cantidad ${esEntrada ? 'entrada' : 'salida'}">${esEntrada ? '+' : '-'}${m.cantidad} ${unidad}</div>
                 </div>`;
