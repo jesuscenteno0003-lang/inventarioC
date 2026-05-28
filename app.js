@@ -236,10 +236,18 @@ function enviarNotificacion(titulo, cuerpo, icono = null) {
     }
 }
 
+let audioCtx = null;
+
+function getAudioCtx() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    return audioCtx;
+}
+
 function reproducirAlarma() {
     try {
         if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
-        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const ctx = getAudioCtx();
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         osc.type = 'square';
@@ -250,14 +258,13 @@ function reproducirAlarma() {
         gain.connect(ctx.destination);
         osc.start(ctx.currentTime);
         osc.stop(ctx.currentTime + 0.5);
-        setTimeout(() => ctx.close(), 600);
     } catch (e) { /* fallback */ }
 }
 
 function reproducirConfirmacion() {
     try {
         if (navigator.vibrate) navigator.vibrate(50);
-        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const ctx = getAudioCtx();
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         osc.type = 'sine';
@@ -268,7 +275,6 @@ function reproducirConfirmacion() {
         gain.connect(ctx.destination);
         osc.start(ctx.currentTime);
         osc.stop(ctx.currentTime + 0.15);
-        setTimeout(() => ctx.close(), 200);
     } catch (e) { /* fallback */ }
 }
 
@@ -439,6 +445,10 @@ function eliminarUsuario(id) {
         showToast('Usuario eliminado');
     });
 }
+
+// Inicializar audio context en el primer toque (necesario en iOS)
+document.addEventListener('click', () => { getAudioCtx(); }, { once: true });
+document.addEventListener('touchstart', () => { getAudioCtx(); }, { once: true });
 
 // ============================================================
 // Inicializar
