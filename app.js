@@ -1,20 +1,38 @@
 // ============================================================
-// Inventario Cocina - PWA con Supabase
+// Inventario Cocina - PWA con Supabase REST API directa
 // ============================================================
 
-const SUPABASE_URL = 'https://nmrquawcyypsjvmiwond.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_iTgqTzfSyjkC4g85-UrubA_GGMp3RDy';
-const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const SB_URL = 'https://nmrquawcyypsjvmiwond.supabase.co';
+const SB_KEY = 'sb_publishable_iTgqTzfSyjkC4g85-UrubA_GGMp3RDy';
+
+// Helper: fetch Supabase REST API
+async function sb(table, method = 'GET', body = null, params = '') {
+    const url = `${SB_URL}/rest/v1/${table}${params}`;
+    const opts = {
+        method,
+        headers: {
+            'apikey': SB_KEY,
+            'Authorization': `Bearer ${SB_KEY}`,
+            'Content-Type': 'application/json',
+            'Prefer': method === 'POST' || method === 'PATCH' || method === 'DELETE' ? 'return=representation' : 'return=minimal'
+        }
+    };
+    if (body) opts.body = JSON.stringify(body);
+    const res = await fetch(url, opts);
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({ message: res.statusText }));
+        throw new Error(err.message || err.hint || 'Error en Supabase');
+    }
+    const text = await res.text();
+    return text ? JSON.parse(text) : null;
+}
 
 // ============================================================
 // Inicializar
 // ============================================================
 async function init() {
     try {
-        const { error } = await _supabase.from('productos').select('id').limit(1);
-        if (error && error.code === '42P01') {
-            showToast('Ejecuta el SQL en Supabase Dashboard primero', true);
-        }
+        await sb('productos', 'GET', null, '?select=id&limit=1');
 
         document.getElementById('splash').classList.add('hidden');
         document.getElementById('app').classList.remove('hidden');
@@ -26,8 +44,10 @@ async function init() {
         await actualizarAlertas();
 
     } catch (error) {
-        console.error('Error initializing:', error);
+        console.error('Error init:', error);
         showToast('Error: ' + error.message, true);
+        document.getElementById('splash').classList.add('hidden');
+        document.getElementById('app').classList.remove('hidden');
     }
 }
 
@@ -65,19 +85,9 @@ function setupEventListeners() {
 
     document.getElementById('form-producto').addEventListener('submit', guardarProducto);
     document.getElementById('form-movimiento').addEventListener('submit', guardarMovimiento);
-
-    document.getElementById('search-productos').addEventListener('input', (e) => {
-        cargarProductos(e.target.value);
-    });
-
-    document.getElementById('search-movimientos').addEventListener('input', (e) => {
-        cargarMovimientos(e.target.value);
-    });
-
-    document.getElementById('filter-categoria').addEventListener('change', (e) => {
-        cargarProductos('', e.target.value);
-    });
-
+    document.getElementById('search-productos').addEventListener('input', (e) => cargarProductos(e.target.value));
+    document.getElementById('search-movimientos').addEventListener('input', (e) => cargarMovimientos(e.target.value));
+    document.getElementById('filter-categoria').addEventListener('change', (e) => cargarProductos('', e.target.value));
     document.getElementById('btn-export').addEventListener('click', exportarDatos);
 }
 
@@ -85,20 +95,18 @@ function setupEventListeners() {
 // Dashboard
 // ============================================================
 async function actualizarDashboard() {
-    const { data: productos } = await _supabase.from('productos').select('*');
+    const productos = await sb('productos');
     if (!productos) return;
 
     const total = productos.length;
     const stockBajo = productos.filter(p => p.stock_actual <= p.stock_minimo).length;
     const totalStock = productos.reduce((sum, p) => sum + (p.stock_actual || 0), 0);
-    const stockOk = total - stockBajo;
 
     document.getElementById('total-productos').textContent = total;
     document.getElementById('stock-bajo').textContent = stockBajo;
     document.getElementById('total-stock').textContent = totalStock.toFixed(1);
-    document.getElementById('stock-ok').textContent = stockOk;
+    document.getElementById('stock-ok').textContent = total - stockBajo;
 
-    // Categorías
     const cats = {};
     productos.forEach(p => {
         if (!cats[p.categoria]) cats[p.categoria] = { total: 0, bajo: 0 };
@@ -116,11 +124,9 @@ async function actualizarDashboard() {
                     <div class="categoria-count">${data.total} productos</div>
                 </div>
                 ${data.bajo > 0 ? `<span class="categoria-badge danger">⚠ ${data.bajo}</span>` : ''}
-            </div>
-        `;
+            </div>`;
     });
 
-    // Stock bajo
     const stockBajoList = productos
         .filter(p => p.stock_actual <= p.stock_minimo)
         .sort((a, b) => (a.stock_actual - a.stock_minimo) - (b.stock_actual - b.stock_minimo));
@@ -137,8 +143,7 @@ async function actualizarDashboard() {
                         <div class="stock-item-detail">${p.categoria} | Mínimo: ${p.stock_minimo} ${p.unidad}</div>
                     </div>
                     <span class="stock-item-badge">${p.stock_actual} ${p.unidad}</span>
-                </div>
-            `;
+                </div>`;
         });
     } else {
         stockBajoDiv.innerHTML = '<div class="empty-state"><div class="empty-state-icon">✅</div><p>Todos los productos tienen stock suficiente</p></div>';
@@ -149,18 +154,11 @@ async function actualizarDashboard() {
 // Productos
 // ============================================================
 async function cargarProductos(search = '', categoria = '') {
-    let query = _supabase.from('productos').select('*').order('categoria').order('nombre');
+    let params = '?select=*&order=categoria,nombre';
+    if (search) params += `&nombre=ilike.*${search}*`;
+    if (categoria) params += `&categoria=eq.${categoria}`;
 
-    if (search) {
-        query = query.ilike('nombre', `%${search}%`);
-    }
-    if (categoria) {
-        query = query.eq('categoria', categoria);
-    }
-
-    const { data: productos, error } = await query;
-    if (error) { console.error(error); return; }
-
+    const productos = await sb('productos', 'GET', null, params);
     const list = document.getElementById('productos-list');
     list.innerHTML = '';
 
@@ -181,8 +179,7 @@ async function cargarProductos(search = '', categoria = '') {
                         <button class="btn-edit" onclick="editarProducto(${p.id})">✏️</button>
                         <button class="btn-delete" onclick="eliminarProducto(${p.id}, '${p.nombre}')">🗑️</button>
                     </div>
-                </div>
-            `;
+                </div>`;
         });
     } else {
         list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📦</div><p>No se encontraron productos</p></div>';
@@ -199,65 +196,57 @@ async function guardarProducto(e) {
     const stockMin = parseFloat(document.getElementById('producto-stock-min').value) || 0;
     const stockAct = parseFloat(document.getElementById('producto-stock-act').value) || 0;
 
-    if (!nombre) {
-        showToast('Ingrese el nombre del producto', true);
-        return;
-    }
+    if (!nombre) { showToast('Ingrese el nombre', true); return; }
 
-    if (id) {
-        const { error } = await _supabase.from('productos').update({
-            nombre, unidad, stock_minimo: stockMin, categoria
-        }).eq('id', parseInt(id));
-        if (error) { showToast('Error: ' + error.message, true); return; }
-        showToast('Producto actualizado');
-    } else {
-        const { error } = await _supabase.from('productos').insert({
-            nombre, unidad, stock_minimo: stockMin, stock_actual: stockAct, categoria
-        });
-        if (error) { showToast('Error: ' + error.message, true); return; }
-        showToast('Producto agregado');
+    try {
+        if (id) {
+            await sb('productos', 'PATCH', { nombre, unidad, stock_minimo: stockMin, categoria }, `?id=eq.${id}`);
+            showToast('Producto actualizado');
+        } else {
+            await sb('productos', 'POST', { nombre, unidad, stock_minimo: stockMin, stock_actual: stockAct, categoria });
+            showToast('Producto agregado');
+        }
+        document.getElementById('modal-producto').classList.add('hidden');
+        await cargarProductos();
+        await actualizarDashboard();
+        await actualizarAlertas();
+    } catch (err) {
+        showToast('Error: ' + err.message, true);
     }
-
-    document.getElementById('modal-producto').classList.add('hidden');
-    await cargarProductos();
-    await actualizarDashboard();
-    await actualizarAlertas();
 }
 
 async function editarProducto(id) {
-    const { data } = await _supabase.from('productos').select('*').eq('id', id).single();
-    if (!data) return;
+    const data = await sb('productos', 'GET', null, `?id=eq.${id}&select=*`);
+    if (!data || !data.length) return;
+    const p = data[0];
 
     document.getElementById('modal-producto-title').textContent = 'Editar Producto';
-    document.getElementById('producto-id').value = data.id;
-    document.getElementById('producto-nombre').value = data.nombre;
-    document.getElementById('producto-unidad').value = data.unidad;
-    document.getElementById('producto-categoria').value = data.categoria;
-    document.getElementById('producto-stock-min').value = data.stock_minimo;
-    document.getElementById('producto-stock-act').value = data.stock_actual;
-
+    document.getElementById('producto-id').value = p.id;
+    document.getElementById('producto-nombre').value = p.nombre;
+    document.getElementById('producto-unidad').value = p.unidad;
+    document.getElementById('producto-categoria').value = p.categoria;
+    document.getElementById('producto-stock-min').value = p.stock_minimo;
+    document.getElementById('producto-stock-act').value = p.stock_actual;
     document.getElementById('modal-producto').classList.remove('hidden');
 }
 
 async function eliminarProducto(id, nombre) {
-    if (confirm(`¿Eliminar "${nombre}"?`)) {
-        await _supabase.from('movimientos').delete().eq('producto_id', id);
-        await _supabase.from('productos').delete().eq('id', id);
-        await cargarProductos();
-        await actualizarDashboard();
-        await actualizarAlertas();
-        showToast('Producto eliminado');
-    }
+    if (!confirm(`¿Eliminar "${nombre}"?`)) return;
+    await sb('movimientos', 'DELETE', null, `?producto_id=eq.${id}`);
+    await sb('productos', 'DELETE', null, `?id=eq.${id}`);
+    await cargarProductos();
+    await actualizarDashboard();
+    await actualizarAlertas();
+    showToast('Producto eliminado');
 }
 
 // ============================================================
 // Movimientos
 // ============================================================
 async function populateProductosSelect() {
-    const { data: productos } = await _supabase.from('productos').select('id, nombre, unidad, stock_actual').order('nombre');
+    const productos = await sb('productos', 'GET', null, '?select=id,nombre,unidad,stock_actual&order=nombre');
     const select = document.getElementById('movimiento-producto');
     select.innerHTML = '';
-
     if (productos) {
         productos.forEach(p => {
             select.innerHTML += `<option value="${p.id}">${p.nombre} (${p.stock_actual} ${p.unidad})</option>`;
@@ -266,15 +255,10 @@ async function populateProductosSelect() {
 }
 
 async function cargarMovimientos(search = '') {
-    let query = _supabase.from('movimientos').select('*, productos(nombre, unidad)').order('id', { ascending: false }).limit(50);
+    let params = '?select=*,productos(nombre,unidad)&order=id.desc&limit=50';
+    if (search) params += `&productos.nombre=ilike.*${search}*`;
 
-    if (search) {
-        query = query.ilike('productos.nombre', `%${search}%`);
-    }
-
-    const { data: movimientos, error } = await query;
-    if (error) { console.error(error); return; }
-
+    const movimientos = await sb('movimientos', 'GET', null, params);
     const list = document.getElementById('movimientos-list');
     list.innerHTML = '';
 
@@ -285,18 +269,13 @@ async function cargarMovimientos(search = '') {
             const unidad = m.productos ? m.productos.unidad : '';
             list.innerHTML += `
                 <div class="movimiento-card">
-                    <div class="movimiento-icon ${esEntrada ? 'entrada' : 'salida'}">
-                        ${esEntrada ? '📥' : '📤'}
-                    </div>
+                    <div class="movimiento-icon ${esEntrada ? 'entrada' : 'salida'}">${esEntrada ? '📥' : '📤'}</div>
                     <div class="movimiento-info">
                         <div class="movimiento-producto">${nombre}</div>
                         <div class="movimiento-detail">${m.fecha} ${m.observaciones ? '- ' + m.observaciones : ''}</div>
                     </div>
-                    <div class="movimiento-cantidad ${esEntrada ? 'entrada' : 'salida'}">
-                        ${esEntrada ? '+' : '-'}${m.cantidad} ${unidad}
-                    </div>
-                </div>
-            `;
+                    <div class="movimiento-cantidad ${esEntrada ? 'entrada' : 'salida'}">${esEntrada ? '+' : '-'}${m.cantidad} ${unidad}</div>
+                </div>`;
         });
     } else {
         list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🔄</div><p>No hay movimientos registrados</p></div>';
@@ -311,46 +290,40 @@ async function guardarMovimiento(e) {
     const cantidad = parseFloat(document.getElementById('movimiento-cantidad').value);
     const obs = document.getElementById('movimiento-obs').value;
 
-    if (!cantidad || cantidad <= 0) {
-        showToast('Ingrese una cantidad válida', true);
-        return;
-    }
+    if (!cantidad || cantidad <= 0) { showToast('Ingrese una cantidad válida', true); return; }
 
-    if (tipo === 'Salida') {
-        const { data: prod } = await _supabase.from('productos').select('stock_actual').eq('id', productoId).single();
-        if (prod && cantidad > prod.stock_actual) {
-            showToast(`Stock insuficiente. Actual: ${prod.stock_actual}`, true);
-            return;
+    try {
+        if (tipo === 'Salida') {
+            const prod = await sb('productos', 'GET', null, `?id=eq.${productoId}&select=stock_actual`);
+            if (prod && prod.length && cantidad > prod[0].stock_actual) {
+                showToast(`Stock insuficiente. Actual: ${prod[0].stock_actual}`, true);
+                return;
+            }
         }
+
+        const fecha = new Date().toLocaleString('es-CL');
+        await sb('movimientos', 'POST', { producto_id: productoId, tipo, cantidad, fecha, usuario: 'Mobile', observaciones: obs });
+
+        const prod = await sb('productos', 'GET', null, `?id=eq.${productoId}&select=stock_actual`);
+        const nuevoStock = tipo === 'Entrada' ? prod[0].stock_actual + cantidad : prod[0].stock_actual - cantidad;
+        await sb('productos', 'PATCH', { stock_actual: nuevoStock }, `?id=eq.${productoId}`);
+
+        document.getElementById('modal-movimiento').classList.add('hidden');
+        await cargarMovimientos();
+        await cargarProductos();
+        await actualizarDashboard();
+        await actualizarAlertas();
+        showToast(`Movimiento registrado: ${tipo} de ${cantidad}`);
+    } catch (err) {
+        showToast('Error: ' + err.message, true);
     }
-
-    const fecha = new Date().toLocaleString('es-CL');
-
-    const { error: movError } = await _supabase.from('movimientos').insert({
-        producto_id: productoId, tipo, cantidad, fecha, usuario: 'Mobile', observaciones: obs
-    });
-    if (movError) { showToast('Error: ' + movError.message, true); return; }
-
-    const { data: prod } = await _supabase.from('productos').select('stock_actual').eq('id', productoId).single();
-    const nuevoStock = tipo === 'Entrada' ? prod.stock_actual + cantidad : prod.stock_actual - cantidad;
-
-    await _supabase.from('productos').update({ stock_actual: nuevoStock }).eq('id', productoId);
-
-    document.getElementById('modal-movimiento').classList.add('hidden');
-    await cargarMovimientos();
-    await cargarProductos();
-    await actualizarDashboard();
-    await actualizarAlertas();
-    showToast(`Movimiento registrado: ${tipo} de ${cantidad}`);
 }
 
 // ============================================================
 // Alertas
 // ============================================================
 async function actualizarAlertas() {
-    const { data: productos } = await _supabase.from('productos').select('*').lte('stock_actual', 0);
-    
-    const { data: todos } = await _supabase.from('productos').select('*');
+    const todos = await sb('productos');
     if (!todos) return;
 
     const stockBajo = todos.filter(p => p.stock_actual <= p.stock_minimo).sort((a, b) => (a.stock_actual - a.stock_minimo) - (b.stock_actual - b.stock_minimo));
@@ -365,7 +338,6 @@ async function actualizarAlertas() {
     }
 
     list.innerHTML = '';
-
     if (stockBajo.length > 0) {
         stockBajo.forEach(p => {
             const diferencia = p.stock_minimo - p.stock_actual;
@@ -377,8 +349,7 @@ async function actualizarAlertas() {
                         <div class="stock-item-detail" style="color: var(--red)">Necesita: ${diferencia.toFixed(1)} ${p.unidad}</div>
                     </div>
                     <button class="btn-primary" onclick="agregarEntradaRapida(${p.id})">+ Agregar</button>
-                </div>
-            `;
+                </div>`;
         });
     } else {
         list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">✅</div><p>No hay alertas de stock bajo</p></div>';
@@ -387,19 +358,13 @@ async function actualizarAlertas() {
 
 async function agregarEntradaRapida(productoId) {
     await populateProductosSelect();
-
     document.getElementById('movimiento-tipo').value = 'Entrada';
     document.getElementById('movimiento-cantidad').value = '';
     document.getElementById('movimiento-obs').value = '';
-
     const select = document.getElementById('movimiento-producto');
     for (let i = 0; i < select.options.length; i++) {
-        if (select.options[i].value == productoId) {
-            select.selectedIndex = i;
-            break;
-        }
+        if (select.options[i].value == productoId) { select.selectedIndex = i; break; }
     }
-
     document.getElementById('modal-movimiento').classList.remove('hidden');
 }
 
@@ -407,29 +372,21 @@ async function agregarEntradaRapida(productoId) {
 // Exportar
 // ============================================================
 async function exportarDatos() {
-    const { data: productos } = await _supabase.from('productos').select('*').order('categoria').order('nombre');
-    const { data: movimientos } = await _supabase.from('movimientos').select('*').order('id', { ascending: false });
+    const productos = await sb('productos', 'GET', null, '?select=*&order=categoria,nombre');
+    const movimientos = await sb('movimientos', 'GET', null, '?select=*&order=id.desc');
 
     let csv = 'INVENTARIO CONGELADORA - Exportado: ' + new Date().toLocaleString('es-CL') + '\n\n';
-    csv += 'PRODUCTOS:\n';
-    csv += 'ID,Nombre,Unidad,Stock Mínimo,Stock Actual,Categoría\n';
-    if (productos) productos.forEach(p => {
-        csv += `${p.id},${p.nombre},${p.unidad},${p.stock_minimo},${p.stock_actual},${p.categoria}\n`;
-    });
-
-    csv += '\nMOVIMIENTOS:\n';
-    csv += 'ID,Producto ID,Tipo,Cantidad,Fecha,Usuario,Observaciones\n';
-    if (movimientos) movimientos.forEach(m => {
-        csv += `${m.id},${m.producto_id},${m.tipo},${m.cantidad},${m.fecha},${m.usuario},${m.observaciones || ''}\n`;
-    });
+    csv += 'PRODUCTOS:\nID,Nombre,Unidad,Stock Mínimo,Stock Actual,Categoría\n';
+    if (productos) productos.forEach(p => { csv += `${p.id},${p.nombre},${p.unidad},${p.stock_minimo},${p.stock_actual},${p.categoria}\n`; });
+    csv += '\nMOVIMIENTOS:\nID,Producto ID,Tipo,Cantidad,Fecha,Usuario,Observaciones\n';
+    if (movimientos) movimientos.forEach(m => { csv += `${m.id},${m.producto_id},${m.tipo},${m.cantidad},${m.fecha},${m.usuario},${m.observaciones || ''}\n`; });
 
     const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url;
+    a.href = URL.createObjectURL(blob);
     a.download = `inventario_${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
-    showToast('Datos exportados correctamente');
+    showToast('Datos exportados');
 }
 
 // ============================================================
@@ -446,9 +403,7 @@ function showToast(message, isError = false) {
 // Service Worker
 // ============================================================
 if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js')
-        .then(reg => console.log('SW registered'))
-        .catch(err => console.log('SW error:', err));
+    navigator.serviceWorker.register('sw.js').catch(() => {});
 }
 
 // ============================================================
