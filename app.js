@@ -4,14 +4,14 @@
 
 const SUPABASE_URL = 'https://nmrquawcyypsjvmiwond.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_iTgqTzfSyjkC4g85-UrubA_GGMp3RDy';
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ============================================================
 // Inicializar
 // ============================================================
 async function init() {
     try {
-        const { error } = await supabase.from('productos').select('id').limit(1);
+        const { error } = await _supabase.from('productos').select('id').limit(1);
         if (error && error.code === '42P01') {
             showToast('Ejecuta el SQL en Supabase Dashboard primero', true);
         }
@@ -85,7 +85,7 @@ function setupEventListeners() {
 // Dashboard
 // ============================================================
 async function actualizarDashboard() {
-    const { data: productos } = await supabase.from('productos').select('*');
+    const { data: productos } = await _supabase.from('productos').select('*');
     if (!productos) return;
 
     const total = productos.length;
@@ -149,7 +149,7 @@ async function actualizarDashboard() {
 // Productos
 // ============================================================
 async function cargarProductos(search = '', categoria = '') {
-    let query = supabase.from('productos').select('*').order('categoria').order('nombre');
+    let query = _supabase.from('productos').select('*').order('categoria').order('nombre');
 
     if (search) {
         query = query.ilike('nombre', `%${search}%`);
@@ -205,13 +205,13 @@ async function guardarProducto(e) {
     }
 
     if (id) {
-        const { error } = await supabase.from('productos').update({
+        const { error } = await _supabase.from('productos').update({
             nombre, unidad, stock_minimo: stockMin, categoria
         }).eq('id', parseInt(id));
         if (error) { showToast('Error: ' + error.message, true); return; }
         showToast('Producto actualizado');
     } else {
-        const { error } = await supabase.from('productos').insert({
+        const { error } = await _supabase.from('productos').insert({
             nombre, unidad, stock_minimo: stockMin, stock_actual: stockAct, categoria
         });
         if (error) { showToast('Error: ' + error.message, true); return; }
@@ -225,7 +225,7 @@ async function guardarProducto(e) {
 }
 
 async function editarProducto(id) {
-    const { data } = await supabase.from('productos').select('*').eq('id', id).single();
+    const { data } = await _supabase.from('productos').select('*').eq('id', id).single();
     if (!data) return;
 
     document.getElementById('modal-producto-title').textContent = 'Editar Producto';
@@ -241,8 +241,8 @@ async function editarProducto(id) {
 
 async function eliminarProducto(id, nombre) {
     if (confirm(`¿Eliminar "${nombre}"?`)) {
-        await supabase.from('movimientos').delete().eq('producto_id', id);
-        await supabase.from('productos').delete().eq('id', id);
+        await _supabase.from('movimientos').delete().eq('producto_id', id);
+        await _supabase.from('productos').delete().eq('id', id);
         await cargarProductos();
         await actualizarDashboard();
         await actualizarAlertas();
@@ -254,7 +254,7 @@ async function eliminarProducto(id, nombre) {
 // Movimientos
 // ============================================================
 async function populateProductosSelect() {
-    const { data: productos } = await supabase.from('productos').select('id, nombre, unidad, stock_actual').order('nombre');
+    const { data: productos } = await _supabase.from('productos').select('id, nombre, unidad, stock_actual').order('nombre');
     const select = document.getElementById('movimiento-producto');
     select.innerHTML = '';
 
@@ -266,7 +266,7 @@ async function populateProductosSelect() {
 }
 
 async function cargarMovimientos(search = '') {
-    let query = supabase.from('movimientos').select('*, productos(nombre, unidad)').order('id', { ascending: false }).limit(50);
+    let query = _supabase.from('movimientos').select('*, productos(nombre, unidad)').order('id', { ascending: false }).limit(50);
 
     if (search) {
         query = query.ilike('productos.nombre', `%${search}%`);
@@ -317,7 +317,7 @@ async function guardarMovimiento(e) {
     }
 
     if (tipo === 'Salida') {
-        const { data: prod } = await supabase.from('productos').select('stock_actual').eq('id', productoId).single();
+        const { data: prod } = await _supabase.from('productos').select('stock_actual').eq('id', productoId).single();
         if (prod && cantidad > prod.stock_actual) {
             showToast(`Stock insuficiente. Actual: ${prod.stock_actual}`, true);
             return;
@@ -326,15 +326,15 @@ async function guardarMovimiento(e) {
 
     const fecha = new Date().toLocaleString('es-CL');
 
-    const { error: movError } = await supabase.from('movimientos').insert({
+    const { error: movError } = await _supabase.from('movimientos').insert({
         producto_id: productoId, tipo, cantidad, fecha, usuario: 'Mobile', observaciones: obs
     });
     if (movError) { showToast('Error: ' + movError.message, true); return; }
 
-    const { data: prod } = await supabase.from('productos').select('stock_actual').eq('id', productoId).single();
+    const { data: prod } = await _supabase.from('productos').select('stock_actual').eq('id', productoId).single();
     const nuevoStock = tipo === 'Entrada' ? prod.stock_actual + cantidad : prod.stock_actual - cantidad;
 
-    await supabase.from('productos').update({ stock_actual: nuevoStock }).eq('id', productoId);
+    await _supabase.from('productos').update({ stock_actual: nuevoStock }).eq('id', productoId);
 
     document.getElementById('modal-movimiento').classList.add('hidden');
     await cargarMovimientos();
@@ -348,9 +348,9 @@ async function guardarMovimiento(e) {
 // Alertas
 // ============================================================
 async function actualizarAlertas() {
-    const { data: productos } = await supabase.from('productos').select('*').lte('stock_actual', 0);
+    const { data: productos } = await _supabase.from('productos').select('*').lte('stock_actual', 0);
     
-    const { data: todos } = await supabase.from('productos').select('*');
+    const { data: todos } = await _supabase.from('productos').select('*');
     if (!todos) return;
 
     const stockBajo = todos.filter(p => p.stock_actual <= p.stock_minimo).sort((a, b) => (a.stock_actual - a.stock_minimo) - (b.stock_actual - b.stock_minimo));
@@ -407,8 +407,8 @@ async function agregarEntradaRapida(productoId) {
 // Exportar
 // ============================================================
 async function exportarDatos() {
-    const { data: productos } = await supabase.from('productos').select('*').order('categoria').order('nombre');
-    const { data: movimientos } = await supabase.from('movimientos').select('*').order('id', { ascending: false });
+    const { data: productos } = await _supabase.from('productos').select('*').order('categoria').order('nombre');
+    const { data: movimientos } = await _supabase.from('movimientos').select('*').order('id', { ascending: false });
 
     let csv = 'INVENTARIO CONGELADORA - Exportado: ' + new Date().toLocaleString('es-CL') + '\n\n';
     csv += 'PRODUCTOS:\n';
