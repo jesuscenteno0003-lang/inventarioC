@@ -533,6 +533,14 @@ html, body {
     border: 1px solid transparent;
 }
 
+.producto-body {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+}
+.producto-body:active { opacity: 0.7; }
+
 .producto-card:active {
     transform: scale(0.98);
 }

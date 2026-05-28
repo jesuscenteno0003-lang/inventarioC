@@ -133,6 +133,85 @@ async function actualizarChart() {
     chartConsumo.update('none');
 }
 
+let chartProducto = null;
+
+async function mostrarChartProducto(productoId) {
+    const prod = await sb('productos', 'GET', null, `?id=eq.${productoId}&select=*`);
+    if (!prod || !prod.length) return;
+    const p = prod[0];
+    document.getElementById('chart-producto-title').textContent = `📊 ${p.nombre}`;
+
+    const movs = await sb('movimientos', 'GET', null, `?producto_id=eq.${productoId}&select=tipo,cantidad,fecha&limit=100`);
+    const modal = document.getElementById('modal-chart-producto');
+    modal.classList.remove('hidden');
+
+    const canvas = document.getElementById('chart-producto-canvas');
+    if (chartProducto) { chartProducto.destroy(); chartProducto = null; }
+
+    const ctx = canvas.getContext('2d');
+    const labels = [];
+    const entradas = [];
+    const salidas = [];
+    const hoy = new Date();
+    for (let i = 6; i >= 0; i--) {
+        const d = new Date(hoy);
+        d.setDate(d.getDate() - i);
+        labels.push(d.toLocaleDateString('es-CL', { weekday: 'short', day: 'numeric' }));
+        entradas.push(0);
+        salidas.push(0);
+    }
+
+    const dias = [];
+    for (let i = 6; i >= 0; i--) {
+        const d = new Date(hoy);
+        d.setDate(d.getDate() - i);
+        dias.push(d.toLocaleDateString('es-CL'));
+    }
+
+    if (movs) {
+        movs.forEach(m => {
+            const fechaStr = (m.fecha || '').split(',')[0].split(' ')[0].trim();
+            const idx = dias.indexOf(fechaStr);
+            if (idx !== -1) {
+                if (m.tipo === 'Entrada') entradas[idx] += parseFloat(m.cantidad) || 0;
+                else salidas[idx] += parseFloat(m.cantidad) || 0;
+            }
+        });
+    }
+
+    chartProducto = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [
+                { label: 'Entradas', data: entradas, backgroundColor: 'rgba(232,168,56,0.7)', borderColor: '#e8a838', borderWidth: 2, borderRadius: 4 },
+                { label: 'Salidas', data: salidas, backgroundColor: 'rgba(231,76,60,0.7)', borderColor: '#e74c3c', borderWidth: 2, borderRadius: 4 }
+            ]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: true,
+            plugins: { legend: { labels: { color: '#8888aa', font: { size: 10 } } } },
+            scales: {
+                x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#8888aa', font: { size: 10 } } },
+                y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#8888aa', font: { size: 10 } } }
+            }
+        }
+    });
+
+    const totalEntradas = entradas.reduce((a, b) => a + b, 0);
+    const totalSalidas = salidas.reduce((a, b) => a + b, 0);
+    document.getElementById('chart-producto-stats').textContent =
+        `Stock actual: ${p.stock_actual} ${p.unidad} | Entradas (7d): ${totalEntradas.toFixed(1)} | Salidas (7d): ${totalSalidas.toFixed(1)}`;
+}
+
+// Close chart modal — destroy chart
+document.addEventListener('click', (e) => {
+    const close = e.target.closest('[data-close="modal-chart-producto"]');
+    if (close) {
+        if (chartProducto) { chartProducto.destroy(); chartProducto = null; }
+    }
+});
+
 // ============================================================
 // Notificaciones
 // ============================================================
@@ -149,12 +228,30 @@ function enviarNotificacion(titulo, cuerpo, icono = null) {
     if (!('Notification' in window) || Notification.permission !== 'granted') return;
 
     try {
-        const opciones = { body: cuerpo, tag: 'inventario-stock' };
+        const opciones = { body: cuerpo, tag: 'inventario-stock', vibrate: [200, 100, 200] };
         if (icono) opciones.icon = icono;
         new Notification(titulo, opciones);
     } catch (e) {
         // fallback silencioso
     }
+}
+
+function reproducirAlarma() {
+    try {
+        if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'square';
+        osc.frequency.value = 880;
+        gain.gain.setValueAtTime(0.3, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.5);
+        setTimeout(() => ctx.close(), 600);
+    } catch (e) { /* fallback */ }
 }
 
 async function verificarStockBajoNotificar() {
@@ -180,6 +277,7 @@ async function verificarStockBajoNotificar() {
             `⚠️ ${nuevos.length} producto(s) con stock bajo`,
             nombres
         );
+        reproducirAlarma();
         localStorage.setItem('notificados', JSON.stringify(yaNotificados));
     }
 }
@@ -378,7 +476,12 @@ function setupEventListeners() {
             document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             btn.classList.add('active');
-            document.getElementById(`tab-${btn.dataset.tab}`).classList.add('active');
+            const tabId = `tab-${btn.dataset.tab}`;
+            document.getElementById(tabId).classList.add('active');
+            if (btn.dataset.tab === 'transferencia') {
+                populateTransferSelect();
+                cargarTransferencias();
+            }
         });
     });
 
@@ -394,9 +497,11 @@ function setupEventListeners() {
 
     document.getElementById('productos-list').addEventListener('click', (e) => {
         const edit = e.target.closest('.btn-edit');
-        if (edit) editarProducto(parseInt(edit.dataset.id));
+        if (edit) return editarProducto(parseInt(edit.dataset.id));
         const del = e.target.closest('.btn-delete');
-        if (del) eliminarProducto(parseInt(del.dataset.id), del.dataset.nombre);
+        if (del) return eliminarProducto(parseInt(del.dataset.id), del.dataset.nombre);
+        const body = e.target.closest('.producto-body');
+        if (body) mostrarChartProducto(parseInt(body.dataset.id));
     });
 
     document.getElementById('btn-export-produccion').addEventListener('click', exportarProduccion);
@@ -415,6 +520,7 @@ function setupEventListeners() {
 
     document.getElementById('form-producto').addEventListener('submit', guardarProducto);
     document.getElementById('form-movimiento').addEventListener('submit', guardarMovimiento);
+    document.getElementById('form-transferencia').addEventListener('submit', guardarTransferencia);
     document.getElementById('search-productos').addEventListener('input', (e) => cargarProductos(e.target.value));
     document.getElementById('search-movimientos').addEventListener('input', (e) => cargarMovimientos(e.target.value));
     document.getElementById('filter-categoria').addEventListener('change', (e) => cargarProductos('', e.target.value));
@@ -515,14 +621,16 @@ async function cargarProductos(search = '', categoria = '') {
             const esBajo = p.stock_actual <= p.stock_minimo;
             list.innerHTML += `
                 <div class="producto-card ${esBajo ? 'stock-bajo' : 'stock-ok'}">
-                    <div class="producto-info">
-                        <div class="producto-name">${p.nombre}</div>
-                        <div class="producto-detail">${p.categoria} | ${p.unidad} | Mín: ${p.stock_minimo}</div>
-                        ${p.notas ? `<div class="producto-notas">${p.notas.replace(/Creado por:/g, '👤')}</div>` : ''}
-                    </div>
-                    <div class="producto-stock">
-                        <div class="producto-stock-value" style="color: ${esBajo ? 'var(--red)' : 'var(--green)'}">${p.stock_actual}</div>
-                        <div class="producto-stock-min">${p.unidad}</div>
+                    <div class="producto-body" data-id="${p.id}">
+                        <div class="producto-info">
+                            <div class="producto-name">${p.nombre}</div>
+                            <div class="producto-detail">${p.categoria} | ${p.unidad} | Mín: ${p.stock_minimo}</div>
+                            ${p.notas ? `<div class="producto-notas">${p.notas.replace(/Creado por:/g, '👤')}</div>` : ''}
+                        </div>
+                        <div class="producto-stock">
+                            <div class="producto-stock-value" style="color: ${esBajo ? 'var(--red)' : 'var(--green)'}">${p.stock_actual}</div>
+                            <div class="producto-stock-min">${p.unidad}</div>
+                        </div>
                     </div>
                     <div class="producto-actions">
                         <button class="btn-edit" data-id="${p.id}">✏️</button>
@@ -731,6 +839,98 @@ async function agregarEntradaRapida(productoId) {
         if (select.options[i].value == productoId) { select.selectedIndex = i; break; }
     }
     document.getElementById('modal-movimiento').classList.remove('hidden');
+}
+
+// ============================================================
+// Transferencia entre áreas
+// ============================================================
+async function populateTransferSelect() {
+    const productos = await sb('productos', 'GET', null, `?select=id,nombre,stock_actual,unidad,area&area=eq.${areaActual}&order=nombre`);
+    const select = document.getElementById('transfer-producto');
+    select.innerHTML = '';
+    if (productos) {
+        productos.forEach(p => {
+            select.innerHTML += `<option value="${p.id}">${p.nombre} (${p.stock_actual} ${p.unidad})</option>`;
+        });
+    }
+}
+
+async function guardarTransferencia(e) {
+    e.preventDefault();
+    const productoId = parseInt(document.getElementById('transfer-producto').value);
+    const cantidad = parseFloat(document.getElementById('transfer-cantidad').value);
+    const destino = document.getElementById('transfer-destino').value;
+    const obs = document.getElementById('transfer-obs').value;
+
+    if (!cantidad || cantidad <= 0) { showToast('Cantidad inválida', true); return; }
+    if (destino === areaActual) { showToast('El destino debe ser diferente al área actual', true); return; }
+
+    try {
+        const src = await sb('productos', 'GET', null, `?id=eq.${productoId}&select=*`);
+        if (!src || !src.length) return;
+        const p = src[0];
+        if (cantidad > p.stock_actual) { showToast(`Stock insuficiente. Actual: ${p.stock_actual} ${p.unidad}`, true); return; }
+
+        // Restar stock origen
+        await sb('productos', 'PATCH', { stock_actual: p.stock_actual - cantidad }, `?id=eq.${productoId}`);
+
+        // Movimiento salida origen
+        const fecha = new Date().toLocaleString('es-CL');
+        await sb('movimientos', 'POST', {
+            producto_id: productoId, tipo: 'Salida', cantidad,
+            fecha, usuario: usuarioActual || 'Anónimo',
+            observaciones: `Transferido a ${destino}${obs ? ' - ' + obs : ''}`
+        });
+
+        // Buscar o crear producto en destino
+        const destProd = await sb('productos', 'GET', null, `?nombre=eq.${encodeURIComponent(p.nombre)}&area=eq.${encodeURIComponent(destino)}&select=id,stock_actual`);
+        let destId;
+        if (destProd && destProd.length) {
+            destId = destProd[0].id;
+            await sb('productos', 'PATCH', { stock_actual: destProd[0].stock_actual + cantidad }, `?id=eq.${destId}`);
+        } else {
+            const nuevo = await sb('productos', 'POST', {
+                nombre: p.nombre, unidad: p.unidad, stock_minimo: p.stock_minimo,
+                stock_actual: cantidad, categoria: p.categoria, area: destino,
+                notas: `Creado por: ${usuarioActual || 'Anónimo'} (transferido desde ${areaActual})`
+            });
+            destId = nuevo?.[0]?.id;
+        }
+
+        if (destId) {
+            await sb('movimientos', 'POST', {
+                producto_id: destId, tipo: 'Entrada', cantidad,
+                fecha, usuario: usuarioActual || 'Anónimo',
+                observaciones: `Transferido desde ${areaActual}${obs ? ' - ' + obs : ''}`
+            });
+        }
+
+        document.getElementById('transfer-cantidad').value = '';
+        document.getElementById('transfer-obs').value = '';
+        showToast(`Transferido ${cantidad} ${p.unidad} a ${destino} ✅`);
+        await populateTransferSelect();
+        await cargarTransferencias();
+        await actualizarDashboard();
+        await cargarProductos();
+        await cargarMovimientos();
+        await actualizarAlertas();
+        await actualizarChart();
+        await actualizarProduccion();
+    } catch (err) {
+        showToast('Error: ' + err.message, true);
+    }
+}
+
+async function cargarTransferencias() {
+    const list = document.getElementById('transfer-list');
+    if (!list) return;
+    const movs = await sb('movimientos', 'GET', null, '?select=*,productos(nombre)&observaciones=ilike.*Transferido*&order=id.desc&limit=20');
+    if (movs && movs.length) {
+        const filtrados = movs.filter(m => m.productos);
+        list.innerHTML = filtrados.map(m => `<div style="padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04)">${m.fecha} · ${m.productos?.nombre || 'N/A'} ${m.tipo === 'Entrada' ? '📥' : '📤'} ${m.cantidad} | ${m.observaciones || ''}</div>`).join('');
+    } else {
+        list.innerHTML = '<div style="text-align:center;padding:20px">Sin transferencias recientes</div>';
+    }
 }
 
 // ============================================================
