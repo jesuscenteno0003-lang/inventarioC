@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#1a1a2e">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Inventario Cocina</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📦</text></svg>">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js"></script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Splash Screen -->
+    <div id="splash" class="splash">
+        <div class="splash-content">
+            <div class="splash-icon">📦</div>
+            <h1>Inventario Cocina</h1>
+            <p>Cargando...</p>
+        </div>
+    </div>
+
+    <!-- Main App -->
+    <div id="app" class="app hidden">
+        <!-- Header -->
+        <header class="header">
+            <h1>🧊 Inventario Congeladora</h1>
+            <div class="header-actions">
+                <button id="btn-sync" class="btn-icon" title="Sincronizar">🔄</button>
+                <button id="btn-export" class="btn-icon" title="Exportar">📤</button>
+            </div>
+        </header>
+
+        <!-- Navigation -->
+        <nav class="bottom-nav">
+            <button class="nav-btn active" data-tab="dashboard">
+                <span class="nav-icon">📊</span>
+                <span class="nav-label">Dashboard</span>
+            </button>
+            <button class="nav-btn" data-tab="productos">
+                <span class="nav-icon">📦</span>
+                <span class="nav-label">Productos</span>
+            </button>
+            <button class="nav-btn" data-tab="movimientos">
+                <span class="nav-icon">🔄</span>
+                <span class="nav-label">Movimientos</span>
+            </button>
+            <button class="nav-btn" data-tab="alertas">
+                <span class="nav-icon">⚠️</span>
+                <span class="nav-label">Alertas</span>
+                <span id="badge-alertas" class="badge hidden">0</span>
+            </button>
+        </nav>
+
+        <!-- Tabs Content -->
+        <main class="main-content">
+            <!-- Dashboard -->
+            <section id="tab-dashboard" class="tab active">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon">📦</div>
+                        <div class="stat-value" id="total-productos">0</div>
+                        <div class="stat-label">Productos</div>
+                    </div>
+                    <div class="stat-card stat-danger">
+                        <div class="stat-icon">⚠️</div>
+                        <div class="stat-value" id="stock-bajo">0</div>
+                        <div class="stat-label">Stock Bajo</div>
+                    </div>
+                    <div class="stat-card stat-info">
+                        <div class="stat-icon">📊</div>
+                        <div class="stat-value" id="total-stock">0</div>
+                        <div class="stat-label">Stock Total</div>
+                    </div>
+                    <div class="stat-card stat-success">
+                        <div class="stat-icon">✅</div>
+                        <div class="stat-value" id="stock-ok">0</div>
+                        <div class="stat-label">Stock OK</div>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h2>Categorías</h2>
+                    <div id="categorias-grid" class="categorias-grid"></div>
+                </div>
+
+                <div class="section">
+                    <h2>⚠️ Stock Bajo - Revisar</h2>
+                    <div id="stock-bajo-list" class="stock-bajo-list"></div>
+                </div>
+            </section>
+
+            <!-- Productos -->
+            <section id="tab-productos" class="tab">
+                <div class="search-bar">
+                    <input type="search" id="search-productos" placeholder="Buscar producto...">
+                    <button id="btn-add-producto" class="btn-primary">+ Nuevo</button>
+                </div>
+                
+                <div class="filter-bar">
+                    <select id="filter-categoria">
+                        <option value="">Todas las categorías</option>
+                        <option value="Carnes">Carnes</option>
+                        <option value="Salsas">Salsas</option>
+                        <option value="Fondos">Fondos</option>
+                        <option value="Preparados">Preparados</option>
+                        <option value="Pastas">Pastas</option>
+                        <option value="Mariscos">Mariscos</option>
+                    </select>
+                </div>
+
+                <div id="productos-list" class="productos-list"></div>
+            </section>
+
+            <!-- Movimientos -->
+            <section id="tab-movimientos" class="tab">
+                <div class="search-bar">
+                    <input type="search" id="search-movimientos" placeholder="Buscar movimiento...">
+                    <button id="btn-add-movimiento" class="btn-primary">+ Nuevo</button>
+                </div>
+
+                <div id="movimientos-list" class="movimientos-list"></div>
+            </section>
+
+            <!-- Alertas -->
+            <section id="tab-alertas" class="tab">
+                <div class="alertas-header">
+                    <h2>⚠️ Productos con Stock Bajo</h2>
+                    <p>Estos productos necesitan reposición urgente</p>
+                </div>
+                <div id="alertas-list" class="alertas-list"></div>
+            </section>
+        </main>
+
+        <!-- Modal Producto -->
+        <div id="modal-producto" class="modal hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 id="modal-producto-title">Nuevo Producto</h2>
+                    <button class="btn-close" data-close="modal-producto">&times;</button>
+                </div>
+                <form id="form-producto">
+                    <input type="hidden" id="producto-id">
+                    <div class="form-group">
+                        <label>Nombre *</label>
+                        <input type="text" id="producto-nombre" required>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Unidad</label>
+                            <select id="producto-unidad">
+                                <option value="UND">UND</option>
+                                <option value="KG">KG</option>
+                                <option value="LITROS">LITROS</option>
+                                <option value="G">G</option>
+                                <option value="ML">ML</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Categoría</label>
+                            <select id="producto-categoria">
+                                <option value="Carnes">Carnes</option>
+                                <option value="Salsas">Salsas</option>
+                                <option value="Fondos">Fondos</option>
+                                <option value="Preparados">Preparados</option>
+                                <option value="Pastas">Pastas</option>
+                                <option value="Mariscos">Mariscos</option>
+                                <option value="General">General</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Stock Mínimo</label>
+                            <input type="number" id="producto-stock-min" step="0.1" min="0" value="5">
+                        </div>
+                        <div class="form-group">
+                            <label>Stock Actual</label>
+                            <input type="number" id="producto-stock-act" step="0.1" min="0" value="0">
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn-secondary" data-close="modal-producto">Cancelar</button>
+                        <button type="submit" class="btn-primary">Guardar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Modal Movimiento -->
+        <div id="modal-movimiento" class="modal hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Nuevo Movimiento</h2>
+                    <button class="btn-close" data-close="modal-movimiento">&times;</button>
+                </div>
+                <form id="form-movimiento">
+                    <div class="form-group">
+                        <label>Producto *</label>
+                        <select id="movimiento-producto" required></select>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Tipo *</label>
+                            <select id="movimiento-tipo" required>
+                                <option value="Entrada">Entrada (+)</option>
+                                <option value="Salida">Salida (-)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Cantidad *</label>
+                            <input type="number" id="movimiento-cantidad" step="0.1" min="0.1" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Observaciones</label>
+                        <input type="text" id="movimiento-obs" placeholder="Opcional">
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn-secondary" data-close="modal-movimiento">Cancelar</button>
+                        <button type="submit" class="btn-primary">Registrar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Toast Notification -->
+        <div id="toast" class="toast hidden"></div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
