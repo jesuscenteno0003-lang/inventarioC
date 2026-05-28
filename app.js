@@ -7,6 +7,7 @@ const SB_KEY = 'sb_publishable_iTgqTzfSyjkC4g85-UrubA_GGMp3RDy';
 
 let chartConsumo = null;
 let areaActual = localStorage.getItem('areaActual') || 'Calientes';
+let usuarioActual = localStorage.getItem('usuarioActual') || '';
 
 // Helper: fetch Supabase REST API
 async function sb(table, method = 'GET', body = null, params = '') {
@@ -204,6 +205,65 @@ async function setArea(area) {
 }
 
 // ============================================================
+// Usuarios
+// ============================================================
+function getUsuariosGuardados() {
+    try { return JSON.parse(localStorage.getItem('usuarios') || '[]'); } catch { return []; }
+}
+
+function guardarUsuario(nombre) {
+    const usuarios = getUsuariosGuardados();
+    const nuevos = [nombre, ...usuarios.filter(u => u !== nombre)].slice(0, 10);
+    localStorage.setItem('usuarios', JSON.stringify(nuevos));
+}
+
+function setUsuario(nombre) {
+    usuarioActual = nombre;
+    localStorage.setItem('usuarioActual', nombre);
+    guardarUsuario(nombre);
+    document.getElementById('user-name-display').textContent = nombre || 'Seleccionar usuario';
+}
+
+function mostrarSelectorUsuario() {
+    const usuarios = getUsuariosGuardados();
+    const container = document.getElementById('toast');
+    container.classList.remove('hidden', 'error');
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.placeholder = 'Escribe tu nombre...';
+    input.style.cssText = 'background:var(--bg-card);border:1px solid var(--accent);border-radius:8px;padding:10px 14px;color:var(--text-primary);font-size:14px;width:200px;outline:none;';
+
+    const botones = document.createElement('div');
+    botones.style.cssText = 'display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;';
+
+    usuarios.forEach(u => {
+        const btn = document.createElement('button');
+        btn.textContent = u;
+        btn.style.cssText = 'background:var(--accent-dim);color:var(--accent);border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;';
+        btn.onclick = () => { setUsuario(u); container.classList.add('hidden'); };
+        botones.appendChild(btn);
+    });
+
+    const confirmar = document.createElement('button');
+    confirmar.textContent = '✅ OK';
+    confirmar.style.cssText = 'background:var(--accent);color:#0f0f1a;border:none;border-radius:6px;padding:6px 16px;font-size:12px;font-weight:800;cursor:pointer;';
+    confirmar.onclick = () => {
+        const val = input.value.trim();
+        if (val) { setUsuario(val); container.classList.add('hidden'); }
+    };
+
+    container.innerHTML = '';
+    container.style.cssText = 'position:fixed;bottom:50%;left:50%;transform:translate(-50%,50%);background:var(--bg-secondary);padding:20px;border-radius:16px;z-index:999;box-shadow:0 20px 60px rgba(0,0,0,0.8);border:1px solid rgba(232,168,56,0.2);display:flex;flex-direction:column;align-items:center;gap:8px;width:260px;';
+    container.innerHTML = '<div style="font-size:14px;font-weight:700;margin-bottom:4px">👤 ¿Quién eres?</div>';
+    container.appendChild(input);
+    container.appendChild(botones);
+    container.appendChild(confirmar);
+    input.focus();
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') confirmar.click(); });
+}
+
+// ============================================================
 // Inicializar
 // ============================================================
 async function init() {
@@ -219,6 +279,12 @@ async function init() {
         });
         document.getElementById('header-area').textContent = areaActual;
         document.title = `Inv ${areaActual}`;
+
+        if (usuarioActual) {
+            document.getElementById('user-name-display').textContent = usuarioActual;
+        } else {
+            setTimeout(mostrarSelectorUsuario, 500);
+        }
 
         setupEventListeners();
         initChart();
@@ -273,6 +339,7 @@ function setupEventListeners() {
     });
 
     document.getElementById('btn-export-produccion').addEventListener('click', exportarProduccion);
+    document.getElementById('btn-change-user').addEventListener('click', mostrarSelectorUsuario);
 
     document.getElementById('btn-add-producto').addEventListener('click', () => {
         document.getElementById('modal-producto-title').textContent = 'Nuevo Producto';
@@ -425,7 +492,8 @@ async function guardarProducto(e) {
             await sb('productos', 'PATCH', { nombre, unidad, stock_minimo: stockMin, categoria, area: areaActual }, `?id=eq.${id}`);
             showToast('Producto actualizado');
         } else {
-            await sb('productos', 'POST', { nombre, unidad, stock_minimo: stockMin, stock_actual: stockAct, categoria, area: areaActual });
+            const notas = `Creado por: ${usuarioActual || 'Anónimo'} - ${new Date().toLocaleDateString('es-CL')}`;
+            await sb('productos', 'POST', { nombre, unidad, stock_minimo: stockMin, stock_actual: stockAct, categoria, area: areaActual, notas });
             showToast('Producto agregado');
         }
         document.getElementById('modal-producto').classList.add('hidden');
@@ -533,7 +601,7 @@ async function guardarMovimiento(e) {
         }
 
         const fecha = new Date().toLocaleString('es-CL');
-        await sb('movimientos', 'POST', { producto_id: productoId, tipo, cantidad, fecha, usuario: 'Mobile', observaciones: obs });
+        await sb('movimientos', 'POST', { producto_id: productoId, tipo, cantidad, fecha, usuario: usuarioActual || 'Anónimo', observaciones: obs });
 
         const prod = await sb('productos', 'GET', null, `?id=eq.${productoId}&select=stock_actual`);
         const nuevoStock = tipo === 'Entrada' ? prod[0].stock_actual + cantidad : prod[0].stock_actual - cantidad;
