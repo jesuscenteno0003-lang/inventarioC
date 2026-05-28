@@ -1,51 +1,46 @@
 // ============================================================
-// Inventario Cocina - PWA con persistencia
+// Inventario Cocina - PWA con localStorage
 // ============================================================
 
 let db = null;
 let SQL = null;
-const DB_NAME = 'inventario_cocina_db';
-const DB_STORE = 'database';
+const STORAGE_KEY = 'inventario_congeladora_v2';
 
 // ============================================================
-// IndexedDB - Guardar/Cargar base de datos
+// Guardar/Cargar con localStorage
 // ============================================================
-function openIndexedDB() {
-    return new Promise((resolve, reject) => {
-        const request = indexedDB.open(DB_NAME, 1);
-        request.onerror = () => reject(request.error);
-        request.onsuccess = () => resolve(request.result);
-        request.onupgradeneeded = (e) => {
-            const idb = e.target.result;
-            if (!idb.objectStoreNames.contains(DB_STORE)) {
-                idb.createObjectStore(DB_STORE);
-            }
-        };
-    });
-}
-
-async function guardarDB() {
+function guardarDB() {
     try {
         const data = db.export();
-        const idb = await openIndexedDB();
-        const tx = idb.transaction(DB_STORE, 'readwrite');
-        tx.objectStore(DB_STORE).put(data, 'inventario');
-        return new Promise((resolve) => { tx.oncomplete = resolve; });
+        const array = new Uint8Array(data);
+        let binary = '';
+        for (let i = 0; i < array.length; i++) {
+            binary += String.fromCharCode(array[i]);
+        }
+        const base64 = btoa(binary);
+        localStorage.setItem(STORAGE_KEY, base64);
+        console.log('DB guardada en localStorage, tamaño:', base64.length);
+        return true;
     } catch (e) {
         console.error('Error guardando DB:', e);
+        return false;
     }
 }
 
-async function cargarDB() {
+function cargarDB() {
     try {
-        const idb = await openIndexedDB();
-        const tx = idb.transaction(DB_STORE, 'readonly');
-        const request = tx.objectStore(DB_STORE).get('inventario');
-        return new Promise((resolve) => {
-            request.onsuccess = () => resolve(request.result || null);
-            request.onerror = () => resolve(null);
-        });
+        const base64 = localStorage.getItem(STORAGE_KEY);
+        if (!base64) return null;
+        
+        const binary = atob(base64);
+        const array = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+            array[i] = binary.charCodeAt(i);
+        }
+        console.log('DB cargada desde localStorage');
+        return array;
     } catch (e) {
+        console.error('Error cargando DB:', e);
         return null;
     }
 }
@@ -59,18 +54,17 @@ async function init() {
             locateFile: file => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/${file}`
         });
         
-        // Intentar cargar base de datos guardada
-        const savedData = await cargarDB();
+        const savedData = cargarDB();
         
         if (savedData) {
             db = new SQL.Database(savedData);
-            console.log('Base de datos cargada desde almacenamiento local');
+            console.log('✓ Base de datos restaurada');
         } else {
             db = new SQL.Database();
             crearTablas();
             cargarDatosIniciales();
-            await guardarDB();
-            console.log('Base de datos creada con datos iniciales');
+            guardarDB();
+            console.log('✓ Base de datos creada con datos iniciales');
         }
         
         document.getElementById('splash').classList.add('hidden');
@@ -84,7 +78,7 @@ async function init() {
         
     } catch (error) {
         console.error('Error initializing:', error);
-        showToast('Error al inicializar la base de datos', true);
+        showToast('Error al inicializar: ' + error.message, true);
     }
 }
 
