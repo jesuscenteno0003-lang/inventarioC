@@ -766,6 +766,46 @@ form {
     opacity: 0.5;
 }
 
+/* Area Selector */
+.area-selector {
+    display: flex;
+    gap: 6px;
+    padding: 10px 16px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid rgba(232, 168, 56, 0.1);
+    position: sticky;
+    top: 58px;
+    z-index: 50;
+    -webkit-overflow-scrolling: touch;
+}
+
+.area-btn {
+    flex: 1;
+    background: var(--bg-card);
+    border: 1px solid rgba(232, 168, 56, 0.1);
+    border-radius: var(--radius-sm);
+    padding: 8px 10px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.3s;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+}
+
+.area-btn:active {
+    transform: scale(0.95);
+}
+
+.area-btn.active {
+    background: var(--accent);
+    color: #0f0f1a;
+    border-color: var(--accent);
+    box-shadow: 0 2px 12px rgba(232, 168, 56, 0.3);
+}
+
 /* Chart Section */
 .chart-section {
     margin-bottom: 24px;

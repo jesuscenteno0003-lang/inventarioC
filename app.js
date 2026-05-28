@@ -6,6 +6,7 @@ const SB_URL = 'https://nmrquawcyypsjvmiwond.supabase.co';
 const SB_KEY = 'sb_publishable_iTgqTzfSyjkC4g85-UrubA_GGMp3RDy';
 
 let chartConsumo = null;
+let areaActual = localStorage.getItem('areaActual') || 'Calientes';
 
 // Helper: fetch Supabase REST API
 async function sb(table, method = 'GET', body = null, params = '') {
@@ -98,7 +99,7 @@ function initChart() {
 async function actualizarChart() {
     if (!chartConsumo) return;
 
-    const movimientos = await sb('movimientos', 'GET', null, '?select=tipo,cantidad,fecha');
+    const movimientos = await sb('movimientos', 'GET', null, `?select=tipo,cantidad,fecha&productos.area=eq.${areaActual}`);
     if (!movimientos || movimientos.length === 0) return;
 
     const hoy = new Date();
@@ -181,6 +182,22 @@ async function verificarStockBajoNotificar() {
 }
 
 // ============================================================
+// Cambiar Área
+// ============================================================
+async function setArea(area) {
+    areaActual = area;
+    localStorage.setItem('areaActual', area);
+    document.querySelectorAll('.area-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.area === area);
+    });
+    await actualizarDashboard();
+    await cargarProductos();
+    await cargarMovimientos();
+    await actualizarAlertas();
+    await actualizarChart();
+}
+
+// ============================================================
 // Inicializar
 // ============================================================
 async function init() {
@@ -190,6 +207,10 @@ async function init() {
 
         document.getElementById('splash').classList.add('hidden');
         document.getElementById('app').classList.remove('hidden');
+
+        document.querySelectorAll('.area-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.area === areaActual);
+        });
 
         setupEventListeners();
         initChart();
@@ -229,6 +250,10 @@ function setupEventListeners() {
         btn.addEventListener('click', () => {
             document.getElementById(btn.dataset.close).classList.add('hidden');
         });
+    });
+
+    document.querySelectorAll('.area-btn').forEach(btn => {
+        btn.addEventListener('click', () => setArea(btn.dataset.area));
     });
 
     document.getElementById('btn-add-producto').addEventListener('click', () => {
@@ -273,7 +298,7 @@ function setupEventListeners() {
 // Dashboard
 // ============================================================
 async function actualizarDashboard() {
-    const productos = await sb('productos');
+    const productos = await sb('productos', 'GET', null, `?select=*&area=eq.${areaActual}`);
     if (!productos) return;
 
     const total = productos.length;
@@ -332,7 +357,7 @@ async function actualizarDashboard() {
 // Productos
 // ============================================================
 async function cargarProductos(search = '', categoria = '') {
-    let params = '?select=*&order=categoria,nombre';
+    let params = `?select=*&area=eq.${areaActual}&order=categoria,nombre`;
     if (search) params += `&nombre=ilike.*${search}*`;
     if (categoria) params += `&categoria=eq.${categoria}`;
 
@@ -378,10 +403,10 @@ async function guardarProducto(e) {
 
     try {
         if (id) {
-            await sb('productos', 'PATCH', { nombre, unidad, stock_minimo: stockMin, categoria }, `?id=eq.${id}`);
+            await sb('productos', 'PATCH', { nombre, unidad, stock_minimo: stockMin, categoria, area: areaActual }, `?id=eq.${id}`);
             showToast('Producto actualizado');
         } else {
-            await sb('productos', 'POST', { nombre, unidad, stock_minimo: stockMin, stock_actual: stockAct, categoria });
+            await sb('productos', 'POST', { nombre, unidad, stock_minimo: stockMin, stock_actual: stockAct, categoria, area: areaActual });
             showToast('Producto agregado');
         }
         document.getElementById('modal-producto').classList.add('hidden');
@@ -425,7 +450,7 @@ async function eliminarProducto(id, nombre) {
 // Movimientos
 // ============================================================
 async function populateProductosSelect() {
-    const productos = await sb('productos', 'GET', null, '?select=id,nombre,unidad,stock_actual&order=nombre');
+    const productos = await sb('productos', 'GET', null, `?select=id,nombre,unidad,stock_actual&area=eq.${areaActual}&order=nombre`);
     const select = document.getElementById('movimiento-producto');
     select.innerHTML = '';
     if (productos) {
@@ -436,7 +461,7 @@ async function populateProductosSelect() {
 }
 
 async function cargarMovimientos(search = '') {
-    let params = '?select=*,productos(nombre,unidad)&order=id.desc&limit=50';
+    let params = `?select=*,productos(nombre,unidad)&order=id.desc&limit=50&productos.area=eq.${areaActual}`;
     if (search) params += `&productos.nombre=ilike.*${search}*`;
 
     const movimientos = await sb('movimientos', 'GET', null, params);
@@ -505,7 +530,7 @@ async function guardarMovimiento(e) {
 // Alertas
 // ============================================================
 async function actualizarAlertas() {
-    const todos = await sb('productos');
+    const todos = await sb('productos', 'GET', null, `?select=*&area=eq.${areaActual}`);
     if (!todos) return;
 
     const stockBajo = todos.filter(p => p.stock_actual <= p.stock_minimo).sort((a, b) => (a.stock_actual - a.stock_minimo) - (b.stock_actual - b.stock_minimo));
@@ -554,8 +579,8 @@ async function agregarEntradaRapida(productoId) {
 // Exportar
 // ============================================================
 async function exportarDatos() {
-    const productos = await sb('productos', 'GET', null, '?select=*&order=categoria,nombre');
-    const movimientos = await sb('movimientos', 'GET', null, '?select=*&order=id.desc');
+    const productos = await sb('productos', 'GET', null, `?select=*&area=eq.${areaActual}&order=categoria,nombre`);
+    const movimientos = await sb('movimientos', 'GET', null, `?select=*&order=id.desc&productos.area=eq.${areaActual}`);
 
     let csv = 'INVENTARIO CONGELADORA - Exportado: ' + new Date().toLocaleString('es-CL') + '\n\n';
     csv += 'PRODUCTOS:\nID,Nombre,Unidad,Stock Mínimo,Stock Actual,Categoría\n';
