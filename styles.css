@@ -140,14 +140,28 @@ html, body {
 .bottom-nav {
     background: var(--bg-secondary);
     display: flex;
-    justify-content: space-around;
-    padding: 8px 0 calc(8px + var(--safe-bottom));
+    justify-content: flex-start;
+    padding: 8px 8px calc(8px + var(--safe-bottom));
+    gap: 2px;
     border-top: 1px solid rgba(232, 168, 56, 0.15);
     position: fixed;
     bottom: 0;
     left: 0;
     right: 0;
     z-index: 100;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    flex-wrap: nowrap;
+}
+.bottom-nav::-webkit-scrollbar { display: none; }
+.nav-btn { flex: 0 0 auto; }
+
+@media (max-width: 480px) {
+    .bottom-nav { gap: 0; padding: 6px 4px calc(6px + var(--safe-bottom)); }
+    .nav-btn { padding: 4px 8px; min-width: 50px; }
+    .nav-icon { font-size: 18px; }
+    .nav-label { font-size: 9px; }
 }
 
 .nav-btn {
