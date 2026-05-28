@@ -1,23 +1,77 @@
 // ============================================================
-// Inventario Cocina - PWA
+// Inventario Cocina - PWA con persistencia
 // ============================================================
 
 let db = null;
-let productos = [];
-let movimientos = [];
+let SQL = null;
+const DB_NAME = 'inventario_cocina_db';
+const DB_STORE = 'database';
+
+// ============================================================
+// IndexedDB - Guardar/Cargar base de datos
+// ============================================================
+function openIndexedDB() {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, 1);
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve(request.result);
+        request.onupgradeneeded = (e) => {
+            const idb = e.target.result;
+            if (!idb.objectStoreNames.contains(DB_STORE)) {
+                idb.createObjectStore(DB_STORE);
+            }
+        };
+    });
+}
+
+async function guardarDB() {
+    try {
+        const data = db.export();
+        const idb = await openIndexedDB();
+        const tx = idb.transaction(DB_STORE, 'readwrite');
+        tx.objectStore(DB_STORE).put(data, 'inventario');
+        return new Promise((resolve) => { tx.oncomplete = resolve; });
+    } catch (e) {
+        console.error('Error guardando DB:', e);
+    }
+}
+
+async function cargarDB() {
+    try {
+        const idb = await openIndexedDB();
+        const tx = idb.transaction(DB_STORE, 'readonly');
+        const request = tx.objectStore(DB_STORE).get('inventario');
+        return new Promise((resolve) => {
+            request.onsuccess = () => resolve(request.result || null);
+            request.onerror = () => resolve(null);
+        });
+    } catch (e) {
+        return null;
+    }
+}
 
 // ============================================================
 // Inicializar
 // ============================================================
 async function init() {
     try {
-        const SQL = await initSqlJs({
+        SQL = await initSqlJs({
             locateFile: file => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/${file}`
         });
         
-        db = new SQL.Database();
-        crearTablas();
-        cargarDatosIniciales();
+        // Intentar cargar base de datos guardada
+        const savedData = await cargarDB();
+        
+        if (savedData) {
+            db = new SQL.Database(savedData);
+            console.log('Base de datos cargada desde almacenamiento local');
+        } else {
+            db = new SQL.Database();
+            crearTablas();
+            cargarDatosIniciales();
+            await guardarDB();
+            console.log('Base de datos creada con datos iniciales');
+        }
         
         document.getElementById('splash').classList.add('hidden');
         document.getElementById('app').classList.remove('hidden');
@@ -255,7 +309,7 @@ function cargarProductos(search = '', categoria = '') {
     }
 }
 
-function guardarProducto(e) {
+async function guardarProducto(e) {
     e.preventDefault();
     
     const id = document.getElementById('producto-id').value;
@@ -280,6 +334,7 @@ function guardarProducto(e) {
         showToast('Producto agregado');
     }
     
+    await guardarDB();
     document.getElementById('modal-producto').classList.add('hidden');
     cargarProductos();
     actualizarDashboard();
@@ -303,10 +358,11 @@ function editarProducto(id) {
     }
 }
 
-function eliminarProducto(id, nombre) {
+async function eliminarProducto(id, nombre) {
     if (confirm(`¿Eliminar "${nombre}"?`)) {
         db.run("DELETE FROM productos WHERE id=?", [id]);
         db.run("DELETE FROM movimientos WHERE producto_id=?", [id]);
+        await guardarDB();
         cargarProductos();
         actualizarDashboard();
         actualizarAlertas();
@@ -371,7 +427,7 @@ function cargarMovimientos(search = '') {
     }
 }
 
-function guardarMovimiento(e) {
+async function guardarMovimiento(e) {
     e.preventDefault();
     
     const productoId = parseInt(document.getElementById('movimiento-producto').value);
@@ -407,6 +463,7 @@ function guardarMovimiento(e) {
         db.run("UPDATE productos SET stock_actual = stock_actual - ? WHERE id=?", [cantidad, productoId]);
     }
     
+    await guardarDB();
     document.getElementById('modal-movimiento').classList.add('hidden');
     cargarMovimientos();
     cargarProductos();
