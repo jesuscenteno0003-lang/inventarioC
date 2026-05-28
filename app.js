@@ -8,23 +8,30 @@ const SB_KEY = 'sb_publishable_iTgqTzfSyjkC4g85-UrubA_GGMp3RDy';
 // Helper: fetch Supabase REST API
 async function sb(table, method = 'GET', body = null, params = '') {
     const url = `${SB_URL}/rest/v1/${table}${params}`;
-    const opts = {
-        method,
-        headers: {
-            'apikey': SB_KEY,
-            'Authorization': `Bearer ${SB_KEY}`,
-            'Content-Type': 'application/json',
-            'Prefer': method === 'POST' || method === 'PATCH' || method === 'DELETE' ? 'return=representation' : 'return=minimal'
-        }
+    const headers = {
+        'apikey': SB_KEY,
+        'Authorization': `Bearer ${SB_KEY}`
     };
-    if (body) opts.body = JSON.stringify(body);
-    const res = await fetch(url, opts);
-    if (!res.ok) {
-        const err = await res.json().catch(() => ({ message: res.statusText }));
-        throw new Error(err.message || err.hint || 'Error en Supabase');
+    const opts = { method, headers };
+
+    if (body) {
+        headers['Content-Type'] = 'application/json';
+        headers['Prefer'] = 'return=representation';
+        opts.body = JSON.stringify(body);
     }
-    const text = await res.text();
-    return text ? JSON.parse(text) : null;
+
+    try {
+        const res = await fetch(url, opts);
+        const text = await res.text();
+        if (!res.ok) {
+            console.error('Supabase error:', res.status, text);
+            throw new Error(JSON.parse(text).message || JSON.parse(text).hint || `Error ${res.status}`);
+        }
+        return text ? JSON.parse(text) : null;
+    } catch (err) {
+        console.error('Fetch error:', err);
+        throw err;
+    }
 }
 
 // ============================================================
@@ -32,7 +39,8 @@ async function sb(table, method = 'GET', body = null, params = '') {
 // ============================================================
 async function init() {
     try {
-        await sb('productos', 'GET', null, '?select=id&limit=1');
+        const test = await sb('productos', 'GET', null, '?select=id&limit=1');
+        console.log('Conexión OK, productos:', test);
 
         document.getElementById('splash').classList.add('hidden');
         document.getElementById('app').classList.remove('hidden');
@@ -45,9 +53,9 @@ async function init() {
 
     } catch (error) {
         console.error('Error init:', error);
-        showToast('Error: ' + error.message, true);
         document.getElementById('splash').classList.add('hidden');
         document.getElementById('app').classList.remove('hidden');
+        showToast('Error conexión: ' + error.message, true);
     }
 }
 
