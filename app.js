@@ -5,6 +5,8 @@
 const SB_URL = 'https://nmrquawcyypsjvmiwond.supabase.co';
 const SB_KEY = 'sb_publishable_iTgqTzfSyjkC4g85-UrubA_GGMp3RDy';
 
+let chartConsumo = null;
+
 // Helper: fetch Supabase REST API
 async function sb(table, method = 'GET', body = null, params = '') {
     const url = `${SB_URL}/rest/v1/${table}${params}`;
@@ -35,6 +37,150 @@ async function sb(table, method = 'GET', body = null, params = '') {
 }
 
 // ============================================================
+// Gráfico de Consumo
+// ============================================================
+function initChart() {
+    const ctx = document.getElementById('chart-consumo');
+    if (!ctx) return;
+
+    const labels = [];
+    const hoy = new Date();
+    for (let i = 6; i >= 0; i--) {
+        const d = new Date(hoy);
+        d.setDate(d.getDate() - i);
+        labels.push(d.toLocaleDateString('es-CL', { weekday: 'short', day: 'numeric' }));
+    }
+
+    chartConsumo = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'Entradas',
+                    data: [0, 0, 0, 0, 0, 0, 0],
+                    backgroundColor: 'rgba(232, 168, 56, 0.7)',
+                    borderColor: '#e8a838',
+                    borderWidth: 2,
+                    borderRadius: 4
+                },
+                {
+                    label: 'Salidas',
+                    data: [0, 0, 0, 0, 0, 0, 0],
+                    backgroundColor: 'rgba(231, 76, 60, 0.7)',
+                    borderColor: '#e74c3c',
+                    borderWidth: 2,
+                    borderRadius: 4
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                x: {
+                    grid: { color: 'rgba(255,255,255,0.05)' },
+                    ticks: { color: '#8888aa', font: { size: 10 } }
+                },
+                y: {
+                    beginAtZero: true,
+                    grid: { color: 'rgba(255,255,255,0.05)' },
+                    ticks: { color: '#8888aa', font: { size: 10 } }
+                }
+            }
+        }
+    });
+}
+
+async function actualizarChart() {
+    if (!chartConsumo) return;
+
+    const movimientos = await sb('movimientos', 'GET', null, '?select=tipo,cantidad,fecha');
+    if (!movimientos || movimientos.length === 0) return;
+
+    const hoy = new Date();
+    const dias = [];
+    for (let i = 6; i >= 0; i--) {
+        const d = new Date(hoy);
+        d.setDate(d.getDate() - i);
+        dias.push(d.toLocaleDateString('es-CL'));
+    }
+
+    const entradas = [0, 0, 0, 0, 0, 0, 0];
+    const salidas = [0, 0, 0, 0, 0, 0, 0];
+
+    movimientos.forEach(m => {
+        const fechaStr = (m.fecha || '').split(',')[0].split(' ')[0].trim();
+        const idx = dias.indexOf(fechaStr);
+        if (idx !== -1) {
+            if (m.tipo === 'Entrada') {
+                entradas[idx] += parseFloat(m.cantidad) || 0;
+            } else {
+                salidas[idx] += parseFloat(m.cantidad) || 0;
+            }
+        }
+    });
+
+    chartConsumo.data.datasets[0].data = entradas;
+    chartConsumo.data.datasets[1].data = salidas;
+    chartConsumo.update('none');
+}
+
+// ============================================================
+// Notificaciones
+// ============================================================
+async function pedirPermisoNotificacion() {
+    if (!('Notification' in window)) return false;
+    if (Notification.permission === 'granted') return true;
+    if (Notification.permission === 'denied') return false;
+
+    const permiso = await Notification.requestPermission();
+    return permiso === 'granted';
+}
+
+function enviarNotificacion(titulo, cuerpo, icono = null) {
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+
+    try {
+        const opciones = { body: cuerpo, tag: 'inventario-stock' };
+        if (icono) opciones.icon = icono;
+        new Notification(titulo, opciones);
+    } catch (e) {
+        // fallback silencioso
+    }
+}
+
+async function verificarStockBajoNotificar() {
+    const productos = await sb('productos');
+    if (!productos) return;
+
+    const stockBajo = productos.filter(p => p.stock_actual <= p.stock_minimo);
+    const yaNotificados = JSON.parse(localStorage.getItem('notificados') || '{}');
+    const ahora = Date.now();
+    const nuevos = [];
+
+    stockBajo.forEach(p => {
+        const ultimaNotif = yaNotificados[p.id] || 0;
+        if (ahora - ultimaNotif > 3600000) {
+            nuevos.push(p);
+            yaNotificados[p.id] = ahora;
+        }
+    });
+
+    if (nuevos.length > 0) {
+        const nombres = nuevos.map(p => `${p.nombre} (${p.stock_actual} ${p.unidad})`).join(', ');
+        enviarNotificacion(
+            `⚠️ ${nuevos.length} producto(s) con stock bajo`,
+            nombres
+        );
+        localStorage.setItem('notificados', JSON.stringify(yaNotificados));
+    }
+}
+
+// ============================================================
 // Inicializar
 // ============================================================
 async function init() {
@@ -46,10 +192,17 @@ async function init() {
         document.getElementById('app').classList.remove('hidden');
 
         setupEventListeners();
+        initChart();
         await actualizarDashboard();
         await cargarProductos();
         await cargarMovimientos();
         await actualizarAlertas();
+        await actualizarChart();
+
+        // Notificaciones periódicas cada 5 min
+        await pedirPermisoNotificacion();
+        await verificarStockBajoNotificar();
+        setInterval(verificarStockBajoNotificar, 300000);
 
     } catch (error) {
         console.error('Error init:', error);
@@ -96,7 +249,24 @@ function setupEventListeners() {
     document.getElementById('search-productos').addEventListener('input', (e) => cargarProductos(e.target.value));
     document.getElementById('search-movimientos').addEventListener('input', (e) => cargarMovimientos(e.target.value));
     document.getElementById('filter-categoria').addEventListener('change', (e) => cargarProductos('', e.target.value));
+    document.getElementById('btn-sync').addEventListener('click', async () => {
+        await actualizarDashboard();
+        await cargarProductos();
+        await cargarMovimientos();
+        await actualizarAlertas();
+        await actualizarChart();
+        showToast('Datos sincronizados 🔄');
+    });
     document.getElementById('btn-export').addEventListener('click', exportarDatos);
+    document.getElementById('btn-notify').addEventListener('click', async () => {
+        const ok = await pedirPermisoNotificacion();
+        if (ok) {
+            await verificarStockBajoNotificar();
+            showToast('Notificaciones activadas ✅');
+        } else {
+            showToast('Permiso denegado', true);
+        }
+    });
 }
 
 // ============================================================
@@ -218,10 +388,12 @@ async function guardarProducto(e) {
         await cargarProductos();
         await actualizarDashboard();
         await actualizarAlertas();
+        await actualizarChart();
     } catch (err) {
         showToast('Error: ' + err.message, true);
     }
 }
+
 
 async function editarProducto(id) {
     const data = await sb('productos', 'GET', null, `?id=eq.${id}&select=*`);
@@ -245,6 +417,7 @@ async function eliminarProducto(id, nombre) {
     await cargarProductos();
     await actualizarDashboard();
     await actualizarAlertas();
+    await actualizarChart();
     showToast('Producto eliminado');
 }
 
@@ -321,6 +494,7 @@ async function guardarMovimiento(e) {
         await cargarProductos();
         await actualizarDashboard();
         await actualizarAlertas();
+        await actualizarChart();
         showToast(`Movimiento registrado: ${tipo} de ${cantidad}`);
     } catch (err) {
         showToast('Error: ' + err.message, true);

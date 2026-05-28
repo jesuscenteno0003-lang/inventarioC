@@ -3,13 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="theme-color" content="#1a1a2e">
+    <meta name="theme-color" content="#0f0f1a">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Inventario Cocina</title>
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📦</text></svg>">
-    <link rel="stylesheet" href="styles.css?v=3">
+    <link rel="stylesheet" href="styles.css?v=4">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 </head>
 <body>
     <!-- Splash Screen -->
@@ -25,8 +26,9 @@
     <div id="app" class="app hidden">
         <!-- Header -->
         <header class="header">
-            <h1>🧊 Inventario Congeladora</h1>
+            <h1>🍳 Inventario Cocina</h1>
             <div class="header-actions">
+                <button id="btn-notify" class="btn-icon" title="Notificaciones">🔔</button>
                 <button id="btn-sync" class="btn-icon" title="Sincronizar">🔄</button>
                 <button id="btn-export" class="btn-icon" title="Exportar">📤</button>
             </div>
@@ -80,8 +82,23 @@
                     </div>
                 </div>
 
+                <div class="chart-section">
+                    <div class="chart-container">
+                        <div class="chart-header">
+                            <h3>📊 Consumo Semanal</h3>
+                            <div class="chart-legend">
+                                <span class="chart-legend-item"><span class="chart-legend-dot" style="background:var(--accent)"></span> Entradas</span>
+                                <span class="chart-legend-item"><span class="chart-legend-dot" style="background:var(--red)"></span> Salidas</span>
+                            </div>
+                        </div>
+                        <canvas id="chart-consumo"></canvas>
+                    </div>
+                </div>
+
                 <div class="section">
-                    <h2>Categorías</h2>
+                    <div class="section-header">
+                        <h2>Categorías</h2>
+                    </div>
                     <div id="categorias-grid" class="categorias-grid"></div>
                 </div>
 
@@ -229,6 +246,6 @@
         <div id="toast" class="toast hidden"></div>
     </div>
 
-    <script src="app.js?v=3"></script>
+    <script src="app.js?v=4"></script>
 </body>
 </html>
