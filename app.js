@@ -511,12 +511,12 @@ function actualizarAlertas() {
 }
 
 function agregarEntradaRapida(productoId) {
-    document.getElementById('movimiento-producto').value = productoId;
+    populateProductosSelect();
+    
     document.getElementById('movimiento-tipo').value = 'Entrada';
     document.getElementById('movimiento-cantidad').value = '';
     document.getElementById('movimiento-obs').value = '';
     
-    // Find and set the product in select
     const select = document.getElementById('movimiento-producto');
     for (let i = 0; i < select.options.length; i++) {
         if (select.options[i].value == productoId) {
