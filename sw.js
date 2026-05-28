@@ -1,4 +1,4 @@
-const CACHE_NAME = 'inventario-v1';
+const CACHE_NAME = 'inventario-v3';
 const urlsToCache = [
     '/',
     '/index.html',
@@ -7,7 +7,6 @@ const urlsToCache = [
     '/manifest.json'
 ];
 
-// Install
 self.addEventListener('install', event => {
     event.waitUntil(
         caches.open(CACHE_NAME)
@@ -16,7 +15,6 @@ self.addEventListener('install', event => {
     self.skipWaiting();
 });
 
-// Activate
 self.addEventListener('activate', event => {
     event.waitUntil(
         caches.keys().then(cacheNames => {
@@ -32,15 +30,17 @@ self.addEventListener('activate', event => {
     self.clients.claim();
 });
 
-// Fetch
+// Network first, fallback to cache
 self.addEventListener('fetch', event => {
     event.respondWith(
-        caches.match(event.request)
+        fetch(event.request)
             .then(response => {
-                if (response) {
-                    return response;
-                }
-                return fetch(event.request);
+                const responseClone = response.clone();
+                caches.open(CACHE_NAME).then(cache => {
+                    cache.put(event.request, responseClone);
+                });
+                return response;
             })
+            .catch(() => caches.match(event.request))
     );
 });
