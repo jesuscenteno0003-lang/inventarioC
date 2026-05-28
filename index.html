@@ -28,7 +28,7 @@
     <div id="app" class="app hidden">
         <!-- Header -->
         <header class="header">
-            <h1>Inv · Área Calientes</h1>
+            <h1>Inv · <span id="header-area">Calientes</span></h1>
             <div class="header-actions">
                 <button id="btn-notify" class="btn-icon" title="Notificaciones">🔔</button>
                 <button id="btn-sync" class="btn-icon" title="Sincronizar">🔄</button>
@@ -49,6 +49,10 @@
             <button class="nav-btn" data-tab="movimientos">
                 <span class="nav-icon">🔄</span>
                 <span class="nav-label">Movimientos</span>
+            </button>
+            <button class="nav-btn" data-tab="produccion">
+                <span class="nav-icon">📋</span>
+                <span class="nav-label">Producción</span>
             </button>
             <button class="nav-btn" data-tab="alertas">
                 <span class="nav-icon">⚠️</span>
@@ -157,6 +161,16 @@
                 </div>
                 <div id="alertas-list" class="alertas-list"></div>
             </section>
+
+            <!-- Producción -->
+            <section id="tab-produccion" class="tab">
+                <div class="section-header">
+                    <h2>📋 Plan de Producción Semanal</h2>
+                    <button id="btn-export-produccion" class="btn-primary" style="padding:8px 14px;font-size:11px">📤 Exportar</button>
+                </div>
+                <p style="font-size:12px;color:var(--text-secondary);margin-bottom:16px">Prioridad de producción según stock actual y consumo.</p>
+                <div id="produccion-list" class="produccion-list"></div>
+            </section>
         </main>
 
         <!-- Modal Producto -->
@@ -255,6 +269,6 @@
         <div id="toast" class="toast hidden"></div>
     </div>
 
-    <script src="app.js?v=5"></script>
+    <script src="app.js?v=6"></script>
 </body>
 </html>

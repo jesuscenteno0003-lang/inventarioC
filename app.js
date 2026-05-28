@@ -99,7 +99,7 @@ function initChart() {
 async function actualizarChart() {
     if (!chartConsumo) return;
 
-    const movimientos = await sb('movimientos', 'GET', null, `?select=tipo,cantidad,fecha&productos.area=eq.${areaActual}`);
+    const movimientos = await sb('movimientos', 'GET', null, `?select=tipo,cantidad,fecha&productos!inner(area)&productos.area=eq.${areaActual}`);
     if (!movimientos || movimientos.length === 0) return;
 
     const hoy = new Date();
@@ -190,11 +190,15 @@ async function setArea(area) {
     document.querySelectorAll('.area-btn').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.area === area);
     });
+    document.getElementById('header-area').textContent = area;
+    document.querySelector('.splash h1').textContent = `Inventario · ${area}`;
+    document.title = `Inv ${area}`;
     await actualizarDashboard();
     await cargarProductos();
     await cargarMovimientos();
     await actualizarAlertas();
     await actualizarChart();
+    await actualizarProduccion();
 }
 
 // ============================================================
@@ -211,6 +215,8 @@ async function init() {
         document.querySelectorAll('.area-btn').forEach(btn => {
             btn.classList.toggle('active', btn.dataset.area === areaActual);
         });
+        document.getElementById('header-area').textContent = areaActual;
+        document.title = `Inv ${areaActual}`;
 
         setupEventListeners();
         initChart();
@@ -219,6 +225,7 @@ async function init() {
         await cargarMovimientos();
         await actualizarAlertas();
         await actualizarChart();
+        await actualizarProduccion();
 
         // Notificaciones periódicas cada 5 min
         await pedirPermisoNotificacion();
@@ -256,6 +263,15 @@ function setupEventListeners() {
         btn.addEventListener('click', () => setArea(btn.dataset.area));
     });
 
+    document.getElementById('productos-list').addEventListener('click', (e) => {
+        const edit = e.target.closest('.btn-edit');
+        if (edit) editarProducto(parseInt(edit.dataset.id));
+        const del = e.target.closest('.btn-delete');
+        if (del) eliminarProducto(parseInt(del.dataset.id), del.dataset.nombre);
+    });
+
+    document.getElementById('btn-export-produccion').addEventListener('click', exportarProduccion);
+
     document.getElementById('btn-add-producto').addEventListener('click', () => {
         document.getElementById('modal-producto-title').textContent = 'Nuevo Producto';
         document.getElementById('form-producto').reset();
@@ -280,6 +296,7 @@ function setupEventListeners() {
         await cargarMovimientos();
         await actualizarAlertas();
         await actualizarChart();
+        await actualizarProduccion();
         showToast('Datos sincronizados 🔄');
     });
     document.getElementById('btn-export').addEventListener('click', exportarDatos);
@@ -379,8 +396,8 @@ async function cargarProductos(search = '', categoria = '') {
                         <div class="producto-stock-min">${p.unidad}</div>
                     </div>
                     <div class="producto-actions">
-                        <button class="btn-edit" onclick="editarProducto(${p.id})">✏️</button>
-                        <button class="btn-delete" onclick="eliminarProducto(${p.id}, '${p.nombre}')">🗑️</button>
+                        <button class="btn-edit" data-id="${p.id}">✏️</button>
+                        <button class="btn-delete" data-id="${p.id}" data-nombre="${p.nombre.replace(/'/g, '')}">🗑️</button>
                     </div>
                 </div>`;
         });
@@ -414,6 +431,7 @@ async function guardarProducto(e) {
         await actualizarDashboard();
         await actualizarAlertas();
         await actualizarChart();
+        await actualizarProduccion();
     } catch (err) {
         showToast('Error: ' + err.message, true);
     }
@@ -443,6 +461,7 @@ async function eliminarProducto(id, nombre) {
     await actualizarDashboard();
     await actualizarAlertas();
     await actualizarChart();
+    await actualizarProduccion();
     showToast('Producto eliminado');
 }
 
@@ -461,7 +480,7 @@ async function populateProductosSelect() {
 }
 
 async function cargarMovimientos(search = '') {
-    let params = `?select=*,productos(nombre,unidad)&order=id.desc&limit=50&productos.area=eq.${areaActual}`;
+    let params = `?select=*,productos!inner(nombre,unidad)&order=id.desc&limit=50&productos.area=eq.${areaActual}`;
     if (search) params += `&productos.nombre=ilike.*${search}*`;
 
     const movimientos = await sb('movimientos', 'GET', null, params);
@@ -520,6 +539,7 @@ async function guardarMovimiento(e) {
         await actualizarDashboard();
         await actualizarAlertas();
         await actualizarChart();
+        await actualizarProduccion();
         showToast(`Movimiento registrado: ${tipo} de ${cantidad}`);
     } catch (err) {
         showToast('Error: ' + err.message, true);
@@ -576,11 +596,174 @@ async function agregarEntradaRapida(productoId) {
 }
 
 // ============================================================
+// Plan de Producción
+// ============================================================
+async function actualizarProduccion() {
+    const container = document.getElementById('produccion-list');
+    if (!container) return;
+
+    const productos = await sb('productos', 'GET', null, `?select=*&area=eq.${areaActual}`);
+    if (!productos || productos.length === 0) {
+        container.innerHTML = '<div class="produccion-empty">📋 Selecciona un área para ver el plan de producción</div>';
+        return;
+    }
+
+    const productIds = productos.map(p => p.id);
+    const todosMov = await sb('movimientos', 'GET', null, '?select=producto_id,tipo,cantidad,fecha&limit=500&order=fecha.desc');
+    const movimientos = todosMov ? todosMov.filter(m => productIds.includes(m.producto_id)) : [];
+
+    const consumo = {};
+    if (movimientos) {
+        const hace7dias = new Date();
+        hace7dias.setDate(hace7dias.getDate() - 7);
+        const hace14dias = new Date();
+        hace14dias.setDate(hace14dias.getDate() - 14);
+
+        movimientos.forEach(m => {
+            if (m.tipo === 'Salida' && m.producto_id) {
+                if (!consumo[m.producto_id]) consumo[m.producto_id] = { semana: 0, quincena: 0 };
+                const fecha = new Date(m.fecha);
+                if (fecha >= hace14dias) consumo[m.producto_id].quincena += parseFloat(m.cantidad) || 0;
+                if (fecha >= hace7dias) consumo[m.producto_id].semana += parseFloat(m.cantidad) || 0;
+            }
+        });
+    }
+
+    const plan = productos.map(p => {
+        const c = consumo[p.id] || { semana: 0, quincena: 0 };
+        const consumoDiario = c.quincena > 0 ? c.quincena / 14 : 0.5;
+        const stock = parseFloat(p.stock_actual) || 0;
+        const min = parseFloat(p.stock_minimo) || 0;
+        const diasRestantes = consumoDiario > 0 ? stock / consumoDiario : 99;
+        const porcentajeStock = min > 0 ? (stock / min) * 100 : 100;
+
+        let prioridad, prioridadLabel, diaSugerido;
+        if (stock <= min || diasRestantes <= 3) {
+            prioridad = 'alta';
+            prioridadLabel = '🔴 Alta';
+            diaSugerido = stock <= 0 ? '¡URGENTE - HOY!' : 'Lunes';
+        } else if (porcentajeStock < 150 || diasRestantes <= 7) {
+            prioridad = 'media';
+            prioridadLabel = '🟡 Media';
+            diaSugerido = 'Miércoles';
+        } else if (c.semana > 0 && porcentajeStock < 250) {
+            prioridad = 'baja';
+            prioridadLabel = '🟢 Baja';
+            diaSugerido = 'Viernes';
+        } else {
+            prioridad = 'ninguna';
+            prioridadLabel = '';
+            diaSugerido = '';
+        }
+
+        const sugerido = prioridad !== 'ninguna' ? Math.max(min * 2 - stock, consumoDiario * 7) : 0;
+
+        return { ...p, consumo: c, consumoDiario, diasRestantes, prioridad, prioridadLabel, diaSugerido, sugerido: Math.ceil(sugerido) };
+    });
+
+    const filtrados = plan.filter(p => p.prioridad !== 'ninguna')
+        .sort((a, b) => {
+            const ordem = { alta: 0, media: 1, baja: 2 };
+            return (ordem[a.prioridad] || 99) - (ordem[b.prioridad] || 99);
+        });
+
+    container.innerHTML = '';
+
+    if (filtrados.length === 0) {
+        container.innerHTML = '<div class="produccion-empty">✅ No hay productos que requieran producción esta semana</div>';
+        return;
+    }
+
+    const diasSemana = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+    const agrupado = {};
+    filtrados.forEach(p => {
+        const d = p.diaSugerido === '¡URGENTE - HOY!' ? 'URGENTE' : p.diaSugerido;
+        if (!agrupado[d]) agrupado[d] = [];
+        agrupado[d].push(p);
+    });
+
+    ['URGENTE', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'].forEach(dia => {
+        if (!agrupado[dia]) return;
+        const esUrgente = dia === 'URGENTE';
+        const header = esUrgente ? '🔥 URGENTE - Producir Hoy' : `📅 ${dia}`;
+
+        container.innerHTML += `<div style="margin-bottom:16px"><h3 style="font-size:14px;margin-bottom:10px;color:${esUrgente ? 'var(--red)' : 'var(--accent)'}">${header}</h3>`;
+
+        agrupado[dia].forEach(p => {
+            container.innerHTML += `
+                <div class="produccion-card priority-${p.prioridad}">
+                    <div class="produccion-header">
+                        <span class="produccion-nombre">${p.nombre}</span>
+                        <span class="produccion-priority">${p.prioridadLabel}</span>
+                    </div>
+                    <div class="produccion-details">
+                        <div class="produccion-detail-item">Stock Actual<strong>${p.stock_actual} ${p.unidad}</strong></div>
+                        <div class="produccion-detail-item">Stock Mínimo<strong>${p.stock_minimo} ${p.unidad}</strong></div>
+                        <div class="produccion-detail-item">Producir<strong style="color:var(--accent)">${p.sugerido} ${p.unidad}</strong></div>
+                    </div>
+                    <div class="produccion-dia">📊 Consumo semanal: ${p.consumo.semana.toFixed(1)} ${p.unidad} · Stock para ${p.diasRestantes < 99 ? p.diasRestantes.toFixed(1) : '∞'} días</div>
+                </div>`;
+        });
+
+        container.innerHTML += '</div>';
+    });
+}
+
+async function exportarProduccion() {
+    const container = document.getElementById('produccion-list');
+    if (!container) return;
+
+    const productos = await sb('productos', 'GET', null, `?select=*&area=eq.${areaActual}`);
+    if (!productos) return;
+
+    const productIds = productos.map(p => p.id);
+    const todosMov = await sb('movimientos', 'GET', null, '?select=producto_id,tipo,cantidad,fecha&limit=500&order=fecha.desc');
+    const movimientos = todosMov ? todosMov.filter(m => productIds.includes(m.producto_id)) : [];
+
+    const consumo = {};
+    if (movimientos) {
+        const hace14dias = new Date();
+        hace14dias.setDate(hace14dias.getDate() - 14);
+        movimientos.forEach(m => {
+            if (m.tipo === 'Salida' && m.producto_id && new Date(m.fecha) >= hace14dias) {
+                if (!consumo[m.producto_id]) consumo[m.producto_id] = 0;
+                consumo[m.producto_id] += parseFloat(m.cantidad) || 0;
+            }
+        });
+    }
+
+    const plan = productos.map(p => {
+        const c = consumo[p.id] || 0;
+        const consumoDiario = c / 14 || 0.5;
+        const stock = parseFloat(p.stock_actual) || 0;
+        const min = parseFloat(p.stock_minimo) || 0;
+        const diasRestantes = consumoDiario > 0 ? stock / consumoDiario : 99;
+        const sugerido = stock <= min || diasRestantes <= 7 ? Math.ceil(Math.max(min * 2 - stock, consumoDiario * 7)) : 0;
+        return { nombre: p.nombre, stock, min, unidad: p.unidad, sugerido, consumoDiario: consumoDiario.toFixed(1), diasRestantes: diasRestantes < 99 ? diasRestantes.toFixed(1) : '∞' };
+    }).filter(p => p.sugerido > 0);
+
+    const hoy = new Date().toLocaleDateString('es-CL');
+    let csv = `PLAN DE PRODUCCIÓN SEMANAL - ${areaActual}\n`;
+    csv += `Generado: ${hoy}\n\n`;
+    csv += `Producto,Stock Actual,Stock Mínimo,Unidad,Consumo Diario,Días Restantes,Producir\n`;
+    plan.forEach(p => {
+        csv += `${p.nombre},${p.stock},${p.min},${p.unidad},${p.consumoDiario},${p.diasRestantes},${p.sugerido}\n`;
+    });
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `produccion_${areaActual.toLowerCase()}_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    showToast('Plan de producción exportado 📋');
+}
+
+// ============================================================
 // Exportar
 // ============================================================
 async function exportarDatos() {
     const productos = await sb('productos', 'GET', null, `?select=*&area=eq.${areaActual}&order=categoria,nombre`);
-    const movimientos = await sb('movimientos', 'GET', null, `?select=*&order=id.desc&productos.area=eq.${areaActual}`);
+    const movimientos = await sb('movimientos', 'GET', null, `?select=*,productos!inner(nombre,unidad)&order=id.desc&productos.area=eq.${areaActual}`);
 
     let csv = 'INVENTARIO CONGELADORA - Exportado: ' + new Date().toLocaleString('es-CL') + '\n\n';
     csv += 'PRODUCTOS:\nID,Nombre,Unidad,Stock Mínimo,Stock Actual,Categoría\n';

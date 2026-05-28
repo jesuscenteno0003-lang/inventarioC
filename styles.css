@@ -806,6 +806,103 @@ form {
     box-shadow: 0 2px 12px rgba(232, 168, 56, 0.3);
 }
 
+/* Production List */
+.produccion-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.produccion-card {
+    background: var(--bg-card);
+    border-radius: var(--radius);
+    padding: 14px;
+    box-shadow: var(--shadow);
+    border-left: 4px solid var(--accent);
+}
+
+.produccion-card.priority-alta {
+    border-left-color: var(--red);
+    background: linear-gradient(145deg, var(--bg-card), rgba(231, 76, 60, 0.08));
+}
+
+.produccion-card.priority-media {
+    border-left-color: var(--yellow);
+}
+
+.produccion-card.priority-baja {
+    border-left-color: var(--green);
+}
+
+.produccion-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.produccion-nombre {
+    font-weight: 700;
+    font-size: 15px;
+}
+
+.produccion-priority {
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 3px 8px;
+    border-radius: 6px;
+}
+
+.priority-alta .produccion-priority {
+    background: var(--red-dim);
+    color: var(--red);
+}
+
+.priority-media .produccion-priority {
+    background: rgba(241, 196, 15, 0.15);
+    color: var(--yellow);
+}
+
+.priority-baja .produccion-priority {
+    background: var(--green-dim);
+    color: var(--green);
+}
+
+.produccion-details {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    font-size: 12px;
+}
+
+.produccion-detail-item {
+    color: var(--text-secondary);
+}
+
+.produccion-detail-item strong {
+    color: var(--text-primary);
+    display: block;
+    font-size: 14px;
+    margin-top: 2px;
+}
+
+.produccion-dia {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(232, 168, 56, 0.1);
+    font-size: 12px;
+    color: var(--accent);
+    font-weight: 600;
+}
+
+.produccion-empty {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-secondary);
+}
+
 /* Chart Section */
 .chart-section {
     margin-bottom: 24px;
