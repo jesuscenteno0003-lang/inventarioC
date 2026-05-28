@@ -1,6 +1,6 @@
 {
-    "name": "Zerrano - Inventario Cocina",
-    "short_name": "Zerrano Inv",
+    "name": "Inventario Área Calientes",
+    "short_name": "Inv Calientes",
     "description": "Inventario de cocina para restaurante Zerrano",
     "start_url": "/",
     "display": "standalone",
