@@ -99,8 +99,10 @@ function initChart() {
 async function actualizarChart() {
     if (!chartConsumo) return;
 
-    const movimientos = await sb('movimientos', 'GET', null, `?select=tipo,cantidad,fecha&productos!inner(area)&productos.area=eq.${areaActual}`);
-    if (!movimientos || movimientos.length === 0) return;
+    const idsArea = (await sb('productos', 'GET', null, `?select=id&area=eq.${areaActual}`) || []).map(p => p.id);
+    const todosMov = await sb('movimientos', 'GET', null, '?select=tipo,cantidad,fecha,producto_id&limit=500');
+    const movimientos = todosMov ? todosMov.filter(m => idsArea.includes(m.producto_id)) : [];
+    if (movimientos.length === 0) return;
 
     const hoy = new Date();
     const dias = [];
@@ -480,10 +482,14 @@ async function populateProductosSelect() {
 }
 
 async function cargarMovimientos(search = '') {
-    let params = `?select=*,productos!inner(nombre,unidad)&order=id.desc&limit=50&productos.area=eq.${areaActual}`;
-    if (search) params += `&productos.nombre=ilike.*${search}*`;
+    const todosMov = await sb('movimientos', 'GET', null, '?select=*,productos(nombre,unidad)&order=id.desc&limit=100');
 
-    const movimientos = await sb('movimientos', 'GET', null, params);
+    let movimientos = [];
+    if (todosMov) {
+        const idsArea = (await sb('productos', 'GET', null, `?select=id&area=eq.${areaActual}`) || []).map(p => p.id);
+        movimientos = todosMov.filter(m => idsArea.includes(m.producto_id));
+        if (search) movimientos = movimientos.filter(m => (m.productos?.nombre || '').toLowerCase().includes(search.toLowerCase()));
+    }
     const list = document.getElementById('movimientos-list');
     list.innerHTML = '';
 
@@ -763,7 +769,9 @@ async function exportarProduccion() {
 // ============================================================
 async function exportarDatos() {
     const productos = await sb('productos', 'GET', null, `?select=*&area=eq.${areaActual}&order=categoria,nombre`);
-    const movimientos = await sb('movimientos', 'GET', null, `?select=*,productos!inner(nombre,unidad)&order=id.desc&productos.area=eq.${areaActual}`);
+    const todosMov = await sb('movimientos', 'GET', null, '?select=*,productos(nombre,unidad)&order=id.desc');
+    const idsArea = productos ? productos.map(p => p.id) : [];
+    const movimientos = todosMov ? todosMov.filter(m => idsArea.includes(m.producto_id)) : [];
 
     let csv = 'INVENTARIO CONGELADORA - Exportado: ' + new Date().toLocaleString('es-CL') + '\n\n';
     csv += 'PRODUCTOS:\nID,Nombre,Unidad,Stock Mínimo,Stock Actual,Categoría\n';
