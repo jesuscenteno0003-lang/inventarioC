@@ -73,7 +73,8 @@
         <div class="user-bar">
             <span class="user-label">👤</span>
             <span id="user-name-display" class="user-name">Seleccionar usuario</span>
-            <button id="btn-change-user" class="user-btn">Cambiar</button>
+            <button id="btn-change-user" class="user-btn" onclick="mostrarSelectorUsuario()">Cambiar</button>
+            <span class="admin-icon" onclick="mostrarAdminUsuarios()" title="Administrar usuarios">⚙️</span>
         </div>
 
         <main class="main-content">
@@ -279,6 +280,20 @@
                 <input type="text" id="input-usuario" placeholder="Escribe tu nombre..." style="width:100%;background:var(--bg-card);border:1px solid rgba(232,168,56,0.2);border-radius:10px;padding:12px 15px;color:var(--text-primary);font-size:14px;outline:none;margin-bottom:12px">
                 <div id="usuarios-recientes" style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-bottom:16px"></div>
                 <button id="btn-confirmar-usuario" class="btn-primary" style="width:100%">OK</button>
+            </div>
+        </div>
+
+        <!-- Admin Usuarios Modal -->
+        <div id="modal-admin-usuarios" class="modal hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <span>👥 Administrar Usuarios</span>
+                    <button class="modal-close" data-close="modal-admin-usuarios">✕</button>
+                </div>
+                <div class="modal-body" style="padding:0 16px">
+                    <div id="admin-usuarios-list"></div>
+                    <p style="font-size:11px;color:var(--text-secondary);margin-top:12px;text-align:center">Los usuarios se comparten entre todos los dispositivos</p>
+                </div>
             </div>
         </div>
 

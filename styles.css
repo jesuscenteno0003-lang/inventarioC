@@ -422,6 +422,15 @@ html, body {
     color: var(--accent);
 }
 
+.admin-icon {
+    font-size: 16px;
+    cursor: pointer;
+    opacity: 0.5;
+    transition: opacity 0.2s;
+    margin-left: 4px;
+}
+.admin-icon:hover { opacity: 1; }
+
 /* Search & Filter Bar */
 .search-bar {
     display: flex;

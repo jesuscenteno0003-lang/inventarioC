@@ -205,26 +205,31 @@ async function setArea(area) {
 }
 
 // ============================================================
-// Usuarios
+// Usuarios (compartidos vía Supabase)
 // ============================================================
-function getUsuariosGuardados() {
-    try { return JSON.parse(localStorage.getItem('usuarios') || '[]'); } catch { return []; }
+async function getUsuarios() {
+    try {
+        return await sb('usuarios', 'GET', null, '?select=id,nombre,ultimo_acceso&activo=eq.true&order=ultimo_acceso.desc&limit=30');
+    } catch { return []; }
 }
 
-function guardarUsuario(nombre) {
-    const usuarios = getUsuariosGuardados();
-    const nuevos = [nombre, ...usuarios.filter(u => u !== nombre)].slice(0, 10);
-    localStorage.setItem('usuarios', JSON.stringify(nuevos));
+async function upsertUsuario(nombre) {
+    const existing = await sb('usuarios', 'GET', null, `?nombre=eq.${encodeURIComponent(nombre)}&select=id`);
+    if (existing && existing.length) {
+        await sb('usuarios', 'PATCH', { ultimo_acceso: new Date().toISOString() }, `?id=eq.${existing[0].id}`);
+    } else {
+        await sb('usuarios', 'POST', { nombre, ultimo_acceso: new Date().toISOString(), activo: true });
+    }
 }
 
-function setUsuario(nombre) {
+async function setUsuario(nombre) {
     usuarioActual = nombre;
     localStorage.setItem('usuarioActual', nombre);
-    guardarUsuario(nombre);
+    await upsertUsuario(nombre);
     document.getElementById('user-name-display').textContent = nombre || 'Seleccionar usuario';
 }
 
-function mostrarSelectorUsuario() {
+async function mostrarSelectorUsuario() {
     const modal = document.getElementById('modal-usuario');
     const input = document.getElementById('input-usuario');
     const recientes = document.getElementById('usuarios-recientes');
@@ -233,24 +238,90 @@ function mostrarSelectorUsuario() {
     input.value = '';
     recientes.innerHTML = '';
 
-    const usuarios = getUsuariosGuardados();
-    usuarios.forEach(u => {
-        const btn = document.createElement('button');
-        btn.textContent = u;
-        btn.style.cssText = 'background:var(--accent-dim);color:var(--accent);border:none;border-radius:6px;padding:6px 14px;font-size:13px;font-weight:700;cursor:pointer;transition:transform 0.2s';
-        btn.onclick = () => { setUsuario(u); modal.classList.add('hidden'); };
-        recientes.appendChild(btn);
-    });
+    const usuarios = await getUsuarios();
+    if (usuarios && usuarios.length) {
+        usuarios.forEach(u => {
+            const btn = document.createElement('button');
+            btn.textContent = u.nombre;
+            btn.style.cssText = 'background:var(--accent-dim);color:var(--accent);border:none;border-radius:6px;padding:6px 14px;font-size:13px;font-weight:700;cursor:pointer;transition:transform 0.2s';
+            btn.onclick = () => { setUsuario(u.nombre); modal.classList.add('hidden'); };
+            recientes.appendChild(btn);
+        });
+    }
 
-    const handleOk = () => {
+    const handleOk = async () => {
         const val = input.value.trim();
-        if (val) { setUsuario(val); modal.classList.add('hidden'); }
+        if (val) { await setUsuario(val); modal.classList.add('hidden'); }
     };
 
     confirmar.onclick = handleOk;
     input.onkeydown = (e) => { if (e.key === 'Enter') handleOk(); };
     modal.classList.remove('hidden');
     setTimeout(() => input.focus(), 300);
+}
+
+// ============================================================
+// Admin Usuarios
+// ============================================================
+let usuariosEditando = [];
+
+async function mostrarAdminUsuarios() {
+    const modal = document.getElementById('modal-admin-usuarios');
+    const list = document.getElementById('admin-usuarios-list');
+    list.innerHTML = '<div style="text-align:center;padding:20px">Cargando...</div>';
+    modal.classList.remove('hidden');
+
+    const usuarios = await getUsuarios();
+    usuariosEditando = usuarios.map(u => ({ ...u }));
+    renderAdminUsuarios();
+}
+
+function renderAdminUsuarios() {
+    const list = document.getElementById('admin-usuarios-list');
+    list.innerHTML = '';
+    if (!usuariosEditando.length) {
+        list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-secondary)">No hay usuarios</div>';
+        return;
+    }
+    usuariosEditando.forEach(u => {
+        const card = document.createElement('div');
+        card.style.cssText = 'display:flex;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.05)';
+        card.innerHTML = `
+            <span style="flex:1;font-size:14px">👤 ${u.nombre}</span>
+            <button class="btn-edit-usuario" data-id="${u.id}" style="background:var(--accent-dim);color:var(--accent);border:none;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer">✏️</button>
+            <button class="btn-del-usuario" data-id="${u.id}" style="background:rgba(231,76,60,0.2);color:#e74c3c;border:none;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer">🗑️</button>
+        `;
+        list.appendChild(card);
+    });
+
+    list.querySelectorAll('.btn-edit-usuario').forEach(btn => {
+        btn.onclick = () => editarUsuario(parseInt(btn.dataset.id));
+    });
+    list.querySelectorAll('.btn-del-usuario').forEach(btn => {
+        btn.onclick = () => eliminarUsuario(parseInt(btn.dataset.id));
+    });
+}
+
+function editarUsuario(id) {
+    const u = usuariosEditando.find(x => x.id === id);
+    if (!u) return;
+    const nuevo = prompt('Nuevo nombre:', u.nombre);
+    if (nuevo && nuevo.trim() && nuevo.trim() !== u.nombre) {
+        u.nombre = nuevo.trim();
+        sb('usuarios', 'PATCH', { nombre: u.nombre }, `?id=eq.${id}`).then(() => {
+            renderAdminUsuarios();
+            showToast('Usuario actualizado');
+        });
+    }
+}
+
+function eliminarUsuario(id) {
+    if (!confirm('¿Eliminar este usuario?')) return;
+    sb('usuarios', 'PATCH', { activo: false }, `?id=eq.${id}`).then(() => {
+        usuariosEditando = usuariosEditando.filter(x => x.id !== id);
+        renderAdminUsuarios();
+        showToast('Usuario eliminado');
+    });
 }
 
 // ============================================================
@@ -273,7 +344,7 @@ async function init() {
         if (usuarioActual) {
             document.getElementById('user-name-display').textContent = usuarioActual;
         } else {
-            setTimeout(mostrarSelectorUsuario, 500);
+            setTimeout(() => mostrarSelectorUsuario(), 500);
         }
 
         setupEventListeners();
@@ -329,8 +400,6 @@ function setupEventListeners() {
     });
 
     document.getElementById('btn-export-produccion').addEventListener('click', exportarProduccion);
-    document.getElementById('btn-change-user').addEventListener('click', mostrarSelectorUsuario);
-
     document.getElementById('btn-add-producto').addEventListener('click', () => {
         document.getElementById('modal-producto-title').textContent = 'Nuevo Producto';
         document.getElementById('form-producto').reset();
