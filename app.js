@@ -254,6 +254,24 @@ function reproducirAlarma() {
     } catch (e) { /* fallback */ }
 }
 
+function reproducirConfirmacion() {
+    try {
+        if (navigator.vibrate) navigator.vibrate(50);
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = 660;
+        gain.gain.setValueAtTime(0.2, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.15);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.15);
+        setTimeout(() => ctx.close(), 200);
+    } catch (e) { /* fallback */ }
+}
+
 async function verificarStockBajoNotificar() {
     const productos = await sb('productos');
     if (!productos) return;
@@ -662,11 +680,11 @@ async function guardarProducto(e) {
             const editLine = `Editado por: ${usuarioActual || 'Anónimo'} - ${new Date().toLocaleDateString('es-CL')}`;
             const nuevasNotas = prevNotas ? `${prevNotas} | ${editLine}` : editLine;
             await sb('productos', 'PATCH', { nombre, unidad, stock_minimo: stockMin, categoria, area: areaActual, notas: nuevasNotas }, `?id=eq.${id}`);
-            showToast('Producto actualizado');
+            showToast('Producto actualizado'); reproducirConfirmacion();
         } else {
             const notas = `Creado por: ${usuarioActual || 'Anónimo'} - ${new Date().toLocaleDateString('es-CL')}`;
             await sb('productos', 'POST', { nombre, unidad, stock_minimo: stockMin, stock_actual: stockAct, categoria, area: areaActual, notas });
-            showToast('Producto agregado');
+            showToast('Producto agregado'); reproducirConfirmacion();
         }
         document.getElementById('modal-producto').classList.add('hidden');
         await cargarProductos();
@@ -786,7 +804,7 @@ async function guardarMovimiento(e) {
         await actualizarAlertas();
         await actualizarChart();
         await actualizarProduccion();
-        showToast(`Movimiento registrado: ${tipo} de ${cantidad}`);
+        showToast(`Movimiento registrado: ${tipo} de ${cantidad}`); reproducirConfirmacion();
     } catch (err) {
         showToast('Error: ' + err.message, true);
     }
@@ -907,7 +925,7 @@ async function guardarTransferencia(e) {
 
         document.getElementById('transfer-cantidad').value = '';
         document.getElementById('transfer-obs').value = '';
-        showToast(`Transferido ${cantidad} ${p.unidad} a ${destino} ✅`);
+        showToast(`Transferido ${cantidad} ${p.unidad} a ${destino} ✅`); reproducirConfirmacion();
         await populateTransferSelect();
         await cargarTransferencias();
         await actualizarDashboard();
