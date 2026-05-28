@@ -1,144 +1,33 @@
 // ============================================================
-// Inventario Cocina - PWA con localStorage
+// Inventario Cocina - PWA con Supabase
 // ============================================================
 
-let db = null;
-let SQL = null;
-const STORAGE_KEY = 'inventario_congeladora_v2';
-
-// ============================================================
-// Guardar/Cargar con localStorage
-// ============================================================
-function guardarDB() {
-    try {
-        const data = db.export();
-        const array = new Uint8Array(data);
-        let binary = '';
-        for (let i = 0; i < array.length; i++) {
-            binary += String.fromCharCode(array[i]);
-        }
-        const base64 = btoa(binary);
-        localStorage.setItem(STORAGE_KEY, base64);
-        console.log('DB guardada en localStorage, tamaño:', base64.length);
-        return true;
-    } catch (e) {
-        console.error('Error guardando DB:', e);
-        return false;
-    }
-}
-
-function cargarDB() {
-    try {
-        const base64 = localStorage.getItem(STORAGE_KEY);
-        if (!base64) return null;
-        
-        const binary = atob(base64);
-        const array = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i++) {
-            array[i] = binary.charCodeAt(i);
-        }
-        console.log('DB cargada desde localStorage');
-        return array;
-    } catch (e) {
-        console.error('Error cargando DB:', e);
-        return null;
-    }
-}
+const SUPABASE_URL = 'https://nmrquawcyypsjvmiwond.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_iTgqTzfSyjkC4g85-UrubA_GGMp3RDy';
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ============================================================
 // Inicializar
 // ============================================================
 async function init() {
     try {
-        SQL = await initSqlJs({
-            locateFile: file => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/${file}`
-        });
-        
-        const savedData = cargarDB();
-        
-        if (savedData) {
-            db = new SQL.Database(savedData);
-            console.log('✓ Base de datos restaurada');
-        } else {
-            db = new SQL.Database();
-            crearTablas();
-            cargarDatosIniciales();
-            guardarDB();
-            console.log('✓ Base de datos creada con datos iniciales');
+        const { error } = await supabase.from('productos').select('id').limit(1);
+        if (error && error.code === '42P01') {
+            showToast('Ejecuta el SQL en Supabase Dashboard primero', true);
         }
-        
+
         document.getElementById('splash').classList.add('hidden');
         document.getElementById('app').classList.remove('hidden');
-        
+
         setupEventListeners();
-        actualizarDashboard();
-        cargarProductos();
-        cargarMovimientos();
-        actualizarAlertas();
-        
+        await actualizarDashboard();
+        await cargarProductos();
+        await cargarMovimientos();
+        await actualizarAlertas();
+
     } catch (error) {
         console.error('Error initializing:', error);
-        showToast('Error al inicializar: ' + error.message, true);
-    }
-}
-
-function crearTablas() {
-    db.run(`
-        CREATE TABLE IF NOT EXISTS productos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nombre TEXT NOT NULL,
-            unidad TEXT DEFAULT 'UND',
-            stock_minimo REAL DEFAULT 5,
-            stock_actual REAL DEFAULT 0,
-            categoria TEXT DEFAULT 'General'
-        )
-    `);
-    
-    db.run(`
-        CREATE TABLE IF NOT EXISTS movimientos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            producto_id INTEGER,
-            tipo TEXT,
-            cantidad REAL,
-            fecha TEXT,
-            usuario TEXT DEFAULT 'Mobile',
-            observaciones TEXT,
-            FOREIGN KEY (producto_id) REFERENCES productos(id)
-        )
-    `);
-}
-
-function cargarDatosIniciales() {
-    const result = db.exec("SELECT COUNT(*) FROM productos");
-    if (result[0].values[0][0] === 0) {
-        const productos = [
-            ["pure", "UND", 10, 52, "Preparados"],
-            ["arroz meloso", "UND", 8, 10, "Preparados"],
-            ["arroz de lomo", "UND", 8, 6, "Preparados"],
-            ["fettuccini", "UND", 10, 36, "Pastas"],
-            ["fondo de cangrejo", "LITROS", 5, 4.6, "Fondos"],
-            ["fondo de pato", "LITROS", 8, 22, "Fondos"],
-            ["fondo de res", "LITROS", 8, 20.34, "Fondos"],
-            ["salsa madrileña", "UND", 5, 10.8, "Salsas"],
-            ["salsa fideua", "UND", 10, 32, "Salsas"],
-            ["salsa Norteña", "UND", 10, 15, "Salsas"],
-            ["salsa chupe", "UND", 5, 10, "Salsas"],
-            ["mixtura", "UND", 15, 53, "Preparados"],
-            ["langostino limpio", "KG", 2, 0, "Mariscos"],
-            ["panceta", "UND", 10, 29, "Carnes"],
-            ["garron", "UND", 10, 43, "Carnes"],
-            ["carrillera", "UND", 15, 51, "Carnes"],
-            ["lomo", "UND", 20, 83, "Carnes"],
-            ["Magret de pato", "UND", 10, 1, "Carnes"],
-            ["Panceta entera", "KG", 5, 0, "Carnes"],
-            ["rabo de toro", "UND", 10, 58, "Carnes"]
-        ];
-        
-        const stmt = db.prepare("INSERT INTO productos (nombre, unidad, stock_minimo, stock_actual, categoria) VALUES (?, ?, ?, ?, ?)");
-        productos.forEach(p => {
-            stmt.run(p);
-        });
-        stmt.free();
+        showToast('Error: ' + error.message, true);
     }
 }
 
@@ -146,107 +35,108 @@ function cargarDatosIniciales() {
 // Event Listeners
 // ============================================================
 function setupEventListeners() {
-    // Navigation
     document.querySelectorAll('.nav-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            
             btn.classList.add('active');
             document.getElementById(`tab-${btn.dataset.tab}`).classList.add('active');
         });
     });
-    
-    // Modals
+
     document.querySelectorAll('[data-close]').forEach(btn => {
         btn.addEventListener('click', () => {
             document.getElementById(btn.dataset.close).classList.add('hidden');
         });
     });
-    
-    // Add buttons
+
     document.getElementById('btn-add-producto').addEventListener('click', () => {
         document.getElementById('modal-producto-title').textContent = 'Nuevo Producto';
         document.getElementById('form-producto').reset();
         document.getElementById('producto-id').value = '';
         document.getElementById('modal-producto').classList.remove('hidden');
     });
-    
-    document.getElementById('btn-add-movimiento').addEventListener('click', () => {
+
+    document.getElementById('btn-add-movimiento').addEventListener('click', async () => {
         document.getElementById('form-movimiento').reset();
-        populateProductosSelect();
+        await populateProductosSelect();
         document.getElementById('modal-movimiento').classList.remove('hidden');
     });
-    
-    // Forms
+
     document.getElementById('form-producto').addEventListener('submit', guardarProducto);
     document.getElementById('form-movimiento').addEventListener('submit', guardarMovimiento);
-    
-    // Search
+
     document.getElementById('search-productos').addEventListener('input', (e) => {
         cargarProductos(e.target.value);
     });
-    
+
     document.getElementById('search-movimientos').addEventListener('input', (e) => {
         cargarMovimientos(e.target.value);
     });
-    
-    // Filter
+
     document.getElementById('filter-categoria').addEventListener('change', (e) => {
         cargarProductos('', e.target.value);
     });
-    
-    // Export
+
     document.getElementById('btn-export').addEventListener('click', exportarDatos);
 }
 
 // ============================================================
 // Dashboard
 // ============================================================
-function actualizarDashboard() {
-    const total = db.exec("SELECT COUNT(*) FROM productos")[0].values[0][0];
-    const stockBajo = db.exec("SELECT COUNT(*) FROM productos WHERE stock_actual <= stock_minimo")[0].values[0][0];
-    const totalStock = db.exec("SELECT COALESCE(SUM(stock_actual), 0) FROM productos")[0].values[0][0];
+async function actualizarDashboard() {
+    const { data: productos } = await supabase.from('productos').select('*');
+    if (!productos) return;
+
+    const total = productos.length;
+    const stockBajo = productos.filter(p => p.stock_actual <= p.stock_minimo).length;
+    const totalStock = productos.reduce((sum, p) => sum + (p.stock_actual || 0), 0);
     const stockOk = total - stockBajo;
-    
+
     document.getElementById('total-productos').textContent = total;
     document.getElementById('stock-bajo').textContent = stockBajo;
     document.getElementById('total-stock').textContent = totalStock.toFixed(1);
     document.getElementById('stock-ok').textContent = stockOk;
-    
+
     // Categorías
-    const cats = db.exec("SELECT categoria, COUNT(*), SUM(CASE WHEN stock_actual <= stock_minimo THEN 1 ELSE 0 END) FROM productos GROUP BY categoria");
+    const cats = {};
+    productos.forEach(p => {
+        if (!cats[p.categoria]) cats[p.categoria] = { total: 0, bajo: 0 };
+        cats[p.categoria].total++;
+        if (p.stock_actual <= p.stock_minimo) cats[p.categoria].bajo++;
+    });
+
     const catsGrid = document.getElementById('categorias-grid');
     catsGrid.innerHTML = '';
-    
-    if (cats.length > 0) {
-        cats[0].values.forEach(([cat, count, bajo]) => {
-            catsGrid.innerHTML += `
-                <div class="categoria-card">
-                    <div>
-                        <div class="categoria-name">${cat}</div>
-                        <div class="categoria-count">${count} productos</div>
-                    </div>
-                    ${bajo > 0 ? `<span class="categoria-badge danger">⚠ ${bajo}</span>` : ''}
+    Object.entries(cats).forEach(([cat, data]) => {
+        catsGrid.innerHTML += `
+            <div class="categoria-card">
+                <div>
+                    <div class="categoria-name">${cat}</div>
+                    <div class="categoria-count">${data.total} productos</div>
                 </div>
-            `;
-        });
-    }
-    
+                ${data.bajo > 0 ? `<span class="categoria-badge danger">⚠ ${data.bajo}</span>` : ''}
+            </div>
+        `;
+    });
+
     // Stock bajo
-    const stockBajoList = db.exec("SELECT * FROM productos WHERE stock_actual <= stock_minimo ORDER BY (stock_actual - stock_minimo)");
+    const stockBajoList = productos
+        .filter(p => p.stock_actual <= p.stock_minimo)
+        .sort((a, b) => (a.stock_actual - a.stock_minimo) - (b.stock_actual - b.stock_minimo));
+
     const stockBajoDiv = document.getElementById('stock-bajo-list');
     stockBajoDiv.innerHTML = '';
-    
-    if (stockBajoList.length > 0 && stockBajoList[0].values.length > 0) {
-        stockBajoList[0].values.forEach(([id, nombre, unidad, stockMin, stockAct, cat]) => {
+
+    if (stockBajoList.length > 0) {
+        stockBajoList.forEach(p => {
             stockBajoDiv.innerHTML += `
                 <div class="stock-item">
                     <div class="stock-item-info">
-                        <div class="stock-item-name">${nombre}</div>
-                        <div class="stock-item-detail">${cat} | Mínimo: ${stockMin} ${unidad}</div>
+                        <div class="stock-item-name">${p.nombre}</div>
+                        <div class="stock-item-detail">${p.categoria} | Mínimo: ${p.stock_minimo} ${p.unidad}</div>
                     </div>
-                    <span class="stock-item-badge">${stockAct} ${unidad}</span>
+                    <span class="stock-item-badge">${p.stock_actual} ${p.unidad}</span>
                 </div>
             `;
         });
@@ -258,42 +148,38 @@ function actualizarDashboard() {
 // ============================================================
 // Productos
 // ============================================================
-function cargarProductos(search = '', categoria = '') {
-    let query = "SELECT * FROM productos WHERE 1=1";
-    const params = [];
-    
+async function cargarProductos(search = '', categoria = '') {
+    let query = supabase.from('productos').select('*').order('categoria').order('nombre');
+
     if (search) {
-        query += " AND nombre LIKE ?";
-        params.push(`%${search}%`);
+        query = query.ilike('nombre', `%${search}%`);
     }
-    
     if (categoria) {
-        query += " AND categoria = ?";
-        params.push(categoria);
+        query = query.eq('categoria', categoria);
     }
-    
-    query += " ORDER BY categoria, nombre";
-    
-    const result = db.exec(query, params);
+
+    const { data: productos, error } = await query;
+    if (error) { console.error(error); return; }
+
     const list = document.getElementById('productos-list');
     list.innerHTML = '';
-    
-    if (result.length > 0 && result[0].values.length > 0) {
-        result[0].values.forEach(([id, nombre, unidad, stockMin, stockAct, cat]) => {
-            const esBajo = stockAct <= stockMin;
+
+    if (productos && productos.length > 0) {
+        productos.forEach(p => {
+            const esBajo = p.stock_actual <= p.stock_minimo;
             list.innerHTML += `
                 <div class="producto-card ${esBajo ? 'stock-bajo' : 'stock-ok'}">
                     <div class="producto-info">
-                        <div class="producto-name">${nombre}</div>
-                        <div class="producto-detail">${cat} | ${unidad} | Mín: ${stockMin}</div>
+                        <div class="producto-name">${p.nombre}</div>
+                        <div class="producto-detail">${p.categoria} | ${p.unidad} | Mín: ${p.stock_minimo}</div>
                     </div>
                     <div class="producto-stock">
-                        <div class="producto-stock-value" style="color: ${esBajo ? 'var(--red)' : 'var(--green)'}">${stockAct}</div>
-                        <div class="producto-stock-min">${unidad}</div>
+                        <div class="producto-stock-value" style="color: ${esBajo ? 'var(--red)' : 'var(--green)'}">${p.stock_actual}</div>
+                        <div class="producto-stock-min">${p.unidad}</div>
                     </div>
                     <div class="producto-actions">
-                        <button class="btn-edit" onclick="editarProducto(${id})">✏️</button>
-                        <button class="btn-delete" onclick="eliminarProducto(${id}, '${nombre}')">🗑️</button>
+                        <button class="btn-edit" onclick="editarProducto(${p.id})">✏️</button>
+                        <button class="btn-delete" onclick="eliminarProducto(${p.id}, '${p.nombre}')">🗑️</button>
                     </div>
                 </div>
             `;
@@ -305,61 +191,61 @@ function cargarProductos(search = '', categoria = '') {
 
 async function guardarProducto(e) {
     e.preventDefault();
-    
+
     const id = document.getElementById('producto-id').value;
     const nombre = document.getElementById('producto-nombre').value;
     const unidad = document.getElementById('producto-unidad').value;
     const categoria = document.getElementById('producto-categoria').value;
     const stockMin = parseFloat(document.getElementById('producto-stock-min').value) || 0;
     const stockAct = parseFloat(document.getElementById('producto-stock-act').value) || 0;
-    
+
     if (!nombre) {
         showToast('Ingrese el nombre del producto', true);
         return;
     }
-    
+
     if (id) {
-        db.run("UPDATE productos SET nombre=?, unidad=?, stock_minimo=?, categoria=? WHERE id=?", 
-               [nombre, unidad, stockMin, categoria, parseInt(id)]);
+        const { error } = await supabase.from('productos').update({
+            nombre, unidad, stock_minimo: stockMin, categoria
+        }).eq('id', parseInt(id));
+        if (error) { showToast('Error: ' + error.message, true); return; }
         showToast('Producto actualizado');
     } else {
-        db.run("INSERT INTO productos (nombre, unidad, stock_minimo, stock_actual, categoria) VALUES (?, ?, ?, ?, ?)",
-               [nombre, unidad, stockMin, stockAct, categoria]);
+        const { error } = await supabase.from('productos').insert({
+            nombre, unidad, stock_minimo: stockMin, stock_actual: stockAct, categoria
+        });
+        if (error) { showToast('Error: ' + error.message, true); return; }
         showToast('Producto agregado');
     }
-    
-    await guardarDB();
+
     document.getElementById('modal-producto').classList.add('hidden');
-    cargarProductos();
-    actualizarDashboard();
-    actualizarAlertas();
+    await cargarProductos();
+    await actualizarDashboard();
+    await actualizarAlertas();
 }
 
-function editarProducto(id) {
-    const result = db.exec("SELECT * FROM productos WHERE id=?", [id]);
-    if (result.length > 0 && result[0].values.length > 0) {
-        const [_, nombre, unidad, stockMin, stockAct, cat] = result[0].values[0];
-        
-        document.getElementById('modal-producto-title').textContent = 'Editar Producto';
-        document.getElementById('producto-id').value = id;
-        document.getElementById('producto-nombre').value = nombre;
-        document.getElementById('producto-unidad').value = unidad;
-        document.getElementById('producto-categoria').value = cat;
-        document.getElementById('producto-stock-min').value = stockMin;
-        document.getElementById('producto-stock-act').value = stockAct;
-        
-        document.getElementById('modal-producto').classList.remove('hidden');
-    }
+async function editarProducto(id) {
+    const { data } = await supabase.from('productos').select('*').eq('id', id).single();
+    if (!data) return;
+
+    document.getElementById('modal-producto-title').textContent = 'Editar Producto';
+    document.getElementById('producto-id').value = data.id;
+    document.getElementById('producto-nombre').value = data.nombre;
+    document.getElementById('producto-unidad').value = data.unidad;
+    document.getElementById('producto-categoria').value = data.categoria;
+    document.getElementById('producto-stock-min').value = data.stock_minimo;
+    document.getElementById('producto-stock-act').value = data.stock_actual;
+
+    document.getElementById('modal-producto').classList.remove('hidden');
 }
 
 async function eliminarProducto(id, nombre) {
     if (confirm(`¿Eliminar "${nombre}"?`)) {
-        db.run("DELETE FROM productos WHERE id=?", [id]);
-        db.run("DELETE FROM movimientos WHERE producto_id=?", [id]);
-        await guardarDB();
-        cargarProductos();
-        actualizarDashboard();
-        actualizarAlertas();
+        await supabase.from('movimientos').delete().eq('producto_id', id);
+        await supabase.from('productos').delete().eq('id', id);
+        await cargarProductos();
+        await actualizarDashboard();
+        await actualizarAlertas();
         showToast('Producto eliminado');
     }
 }
@@ -367,40 +253,36 @@ async function eliminarProducto(id, nombre) {
 // ============================================================
 // Movimientos
 // ============================================================
-function populateProductosSelect() {
+async function populateProductosSelect() {
+    const { data: productos } = await supabase.from('productos').select('id, nombre, unidad, stock_actual').order('nombre');
     const select = document.getElementById('movimiento-producto');
     select.innerHTML = '';
-    
-    const result = db.exec("SELECT id, nombre, unidad, stock_actual FROM productos ORDER BY nombre");
-    if (result.length > 0) {
-        result[0].values.forEach(([id, nombre, unidad, stock]) => {
-            select.innerHTML += `<option value="${id}">${nombre} (${stock} ${unidad})</option>`;
+
+    if (productos) {
+        productos.forEach(p => {
+            select.innerHTML += `<option value="${p.id}">${p.nombre} (${p.stock_actual} ${p.unidad})</option>`;
         });
     }
 }
 
-function cargarMovimientos(search = '') {
-    let query = `
-        SELECT m.id, p.nombre, p.unidad, m.tipo, m.cantidad, m.fecha, m.observaciones 
-        FROM movimientos m 
-        JOIN productos p ON m.producto_id = p.id
-    `;
-    const params = [];
-    
+async function cargarMovimientos(search = '') {
+    let query = supabase.from('movimientos').select('*, productos(nombre, unidad)').order('id', { ascending: false }).limit(50);
+
     if (search) {
-        query += " WHERE p.nombre LIKE ?";
-        params.push(`%${search}%`);
+        query = query.ilike('productos.nombre', `%${search}%`);
     }
-    
-    query += " ORDER BY m.id DESC LIMIT 50";
-    
-    const result = db.exec(query, params);
+
+    const { data: movimientos, error } = await query;
+    if (error) { console.error(error); return; }
+
     const list = document.getElementById('movimientos-list');
     list.innerHTML = '';
-    
-    if (result.length > 0 && result[0].values.length > 0) {
-        result[0].values.forEach(([id, nombre, unidad, tipo, cantidad, fecha, obs]) => {
-            const esEntrada = tipo === 'Entrada';
+
+    if (movimientos && movimientos.length > 0) {
+        movimientos.forEach(m => {
+            const esEntrada = m.tipo === 'Entrada';
+            const nombre = m.productos ? m.productos.nombre : 'N/A';
+            const unidad = m.productos ? m.productos.unidad : '';
             list.innerHTML += `
                 <div class="movimiento-card">
                     <div class="movimiento-icon ${esEntrada ? 'entrada' : 'salida'}">
@@ -408,10 +290,10 @@ function cargarMovimientos(search = '') {
                     </div>
                     <div class="movimiento-info">
                         <div class="movimiento-producto">${nombre}</div>
-                        <div class="movimiento-detail">${fecha} ${obs ? '- ' + obs : ''}</div>
+                        <div class="movimiento-detail">${m.fecha} ${m.observaciones ? '- ' + m.observaciones : ''}</div>
                     </div>
                     <div class="movimiento-cantidad ${esEntrada ? 'entrada' : 'salida'}">
-                        ${esEntrada ? '+' : '-'}${cantidad} ${unidad}
+                        ${esEntrada ? '+' : '-'}${m.cantidad} ${unidad}
                     </div>
                 </div>
             `;
@@ -423,79 +305,78 @@ function cargarMovimientos(search = '') {
 
 async function guardarMovimiento(e) {
     e.preventDefault();
-    
+
     const productoId = parseInt(document.getElementById('movimiento-producto').value);
     const tipo = document.getElementById('movimiento-tipo').value;
     const cantidad = parseFloat(document.getElementById('movimiento-cantidad').value);
     const obs = document.getElementById('movimiento-obs').value;
-    
+
     if (!cantidad || cantidad <= 0) {
         showToast('Ingrese una cantidad válida', true);
         return;
     }
-    
-    // Verificar stock para salidas
+
     if (tipo === 'Salida') {
-        const result = db.exec("SELECT stock_actual FROM productos WHERE id=?", [productoId]);
-        const stockActual = result[0].values[0][0];
-        
-        if (cantidad > stockActual) {
-            showToast(`Stock insuficiente. Actual: ${stockActual}`, true);
+        const { data: prod } = await supabase.from('productos').select('stock_actual').eq('id', productoId).single();
+        if (prod && cantidad > prod.stock_actual) {
+            showToast(`Stock insuficiente. Actual: ${prod.stock_actual}`, true);
             return;
         }
     }
-    
-    // Registrar movimiento
+
     const fecha = new Date().toLocaleString('es-CL');
-    db.run("INSERT INTO movimientos (producto_id, tipo, cantidad, fecha, observaciones) VALUES (?, ?, ?, ?, ?)",
-           [productoId, tipo, cantidad, fecha, obs]);
-    
-    // Actualizar stock
-    if (tipo === 'Entrada') {
-        db.run("UPDATE productos SET stock_actual = stock_actual + ? WHERE id=?", [cantidad, productoId]);
-    } else {
-        db.run("UPDATE productos SET stock_actual = stock_actual - ? WHERE id=?", [cantidad, productoId]);
-    }
-    
-    await guardarDB();
+
+    const { error: movError } = await supabase.from('movimientos').insert({
+        producto_id: productoId, tipo, cantidad, fecha, usuario: 'Mobile', observaciones: obs
+    });
+    if (movError) { showToast('Error: ' + movError.message, true); return; }
+
+    const { data: prod } = await supabase.from('productos').select('stock_actual').eq('id', productoId).single();
+    const nuevoStock = tipo === 'Entrada' ? prod.stock_actual + cantidad : prod.stock_actual - cantidad;
+
+    await supabase.from('productos').update({ stock_actual: nuevoStock }).eq('id', productoId);
+
     document.getElementById('modal-movimiento').classList.add('hidden');
-    cargarMovimientos();
-    cargarProductos();
-    actualizarDashboard();
-    actualizarAlertas();
+    await cargarMovimientos();
+    await cargarProductos();
+    await actualizarDashboard();
+    await actualizarAlertas();
     showToast(`Movimiento registrado: ${tipo} de ${cantidad}`);
 }
 
 // ============================================================
 // Alertas
 // ============================================================
-function actualizarAlertas() {
-    const result = db.exec("SELECT * FROM productos WHERE stock_actual <= stock_minimo ORDER BY (stock_actual - stock_minimo)");
+async function actualizarAlertas() {
+    const { data: productos } = await supabase.from('productos').select('*').lte('stock_actual', 0);
+    
+    const { data: todos } = await supabase.from('productos').select('*');
+    if (!todos) return;
+
+    const stockBajo = todos.filter(p => p.stock_actual <= p.stock_minimo).sort((a, b) => (a.stock_actual - a.stock_minimo) - (b.stock_actual - b.stock_minimo));
     const list = document.getElementById('alertas-list');
     const badge = document.getElementById('badge-alertas');
-    
-    const count = result.length > 0 ? result[0].values.length : 0;
-    
-    if (count > 0) {
-        badge.textContent = count;
+
+    if (stockBajo.length > 0) {
+        badge.textContent = stockBajo.length;
         badge.classList.remove('hidden');
     } else {
         badge.classList.add('hidden');
     }
-    
+
     list.innerHTML = '';
-    
-    if (count > 0) {
-        result[0].values.forEach(([id, nombre, unidad, stockMin, stockAct, cat]) => {
-            const diferencia = stockMin - stockAct;
+
+    if (stockBajo.length > 0) {
+        stockBajo.forEach(p => {
+            const diferencia = p.stock_minimo - p.stock_actual;
             list.innerHTML += `
                 <div class="alerta-item">
                     <div class="stock-item-info">
-                        <div class="stock-item-name">${nombre}</div>
-                        <div class="stock-item-detail">${cat} | Actual: ${stockAct} ${unidad} | Mínimo: ${stockMin} ${unidad}</div>
-                        <div class="stock-item-detail" style="color: var(--red)">Necesita: ${diferencia.toFixed(1)} ${unidad}</div>
+                        <div class="stock-item-name">${p.nombre}</div>
+                        <div class="stock-item-detail">${p.categoria} | Actual: ${p.stock_actual} ${p.unidad} | Mínimo: ${p.stock_minimo} ${p.unidad}</div>
+                        <div class="stock-item-detail" style="color: var(--red)">Necesita: ${diferencia.toFixed(1)} ${p.unidad}</div>
                     </div>
-                    <button class="btn-primary" onclick="agregarEntradaRapida(${id})">+ Agregar</button>
+                    <button class="btn-primary" onclick="agregarEntradaRapida(${p.id})">+ Agregar</button>
                 </div>
             `;
         });
@@ -504,13 +385,13 @@ function actualizarAlertas() {
     }
 }
 
-function agregarEntradaRapida(productoId) {
-    populateProductosSelect();
-    
+async function agregarEntradaRapida(productoId) {
+    await populateProductosSelect();
+
     document.getElementById('movimiento-tipo').value = 'Entrada';
     document.getElementById('movimiento-cantidad').value = '';
     document.getElementById('movimiento-obs').value = '';
-    
+
     const select = document.getElementById('movimiento-producto');
     for (let i = 0; i < select.options.length; i++) {
         if (select.options[i].value == productoId) {
@@ -518,43 +399,36 @@ function agregarEntradaRapida(productoId) {
             break;
         }
     }
-    
+
     document.getElementById('modal-movimiento').classList.remove('hidden');
 }
 
 // ============================================================
 // Exportar
 // ============================================================
-function exportarDatos() {
-    const productos = db.exec("SELECT * FROM productos ORDER BY categoria, nombre");
-    const movimientos = db.exec("SELECT * FROM movimientos ORDER BY id DESC");
-    
+async function exportarDatos() {
+    const { data: productos } = await supabase.from('productos').select('*').order('categoria').order('nombre');
+    const { data: movimientos } = await supabase.from('movimientos').select('*').order('id', { ascending: false });
+
     let csv = 'INVENTARIO CONGELADORA - Exportado: ' + new Date().toLocaleString('es-CL') + '\n\n';
     csv += 'PRODUCTOS:\n';
     csv += 'ID,Nombre,Unidad,Stock Mínimo,Stock Actual,Categoría\n';
-    
-    if (productos.length > 0) {
-        productos[0].values.forEach(row => {
-            csv += row.join(',') + '\n';
-        });
-    }
-    
+    if (productos) productos.forEach(p => {
+        csv += `${p.id},${p.nombre},${p.unidad},${p.stock_minimo},${p.stock_actual},${p.categoria}\n`;
+    });
+
     csv += '\nMOVIMIENTOS:\n';
-    csv += 'ID,Producto ID,Tipo,Cantidad,Fecha,Observaciones\n';
-    
-    if (movimientos.length > 0) {
-        movimientos[0].values.forEach(row => {
-            csv += row.join(',') + '\n';
-        });
-    }
-    
+    csv += 'ID,Producto ID,Tipo,Cantidad,Fecha,Usuario,Observaciones\n';
+    if (movimientos) movimientos.forEach(m => {
+        csv += `${m.id},${m.producto_id},${m.tipo},${m.cantidad},${m.fecha},${m.usuario},${m.observaciones || ''}\n`;
+    });
+
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = `inventario_${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
-    
     showToast('Datos exportados correctamente');
 }
 
@@ -565,10 +439,7 @@ function showToast(message, isError = false) {
     const toast = document.getElementById('toast');
     toast.textContent = message;
     toast.className = isError ? 'toast error' : 'toast';
-    
-    setTimeout(() => {
-        toast.classList.add('hidden');
-    }, 3000);
+    setTimeout(() => { toast.classList.add('hidden'); }, 3000);
 }
 
 // ============================================================
