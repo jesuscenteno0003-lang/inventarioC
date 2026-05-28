@@ -1,10 +1,12 @@
-const CACHE_NAME = 'inventario-v8';
+const CACHE_NAME = 'inventario-v9';
 const urlsToCache = [
     '/',
     '/index.html',
     '/styles.css',
     '/app.js',
-    '/manifest.json'
+    '/manifest.json',
+    '/icon-192.png',
+    '/icon-512.png'
 ];
 
 self.addEventListener('install', event => {
