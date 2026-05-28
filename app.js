@@ -225,42 +225,32 @@ function setUsuario(nombre) {
 }
 
 function mostrarSelectorUsuario() {
+    const modal = document.getElementById('modal-usuario');
+    const input = document.getElementById('input-usuario');
+    const recientes = document.getElementById('usuarios-recientes');
+    const confirmar = document.getElementById('btn-confirmar-usuario');
+
+    input.value = '';
+    recientes.innerHTML = '';
+
     const usuarios = getUsuariosGuardados();
-    const container = document.getElementById('toast');
-    container.classList.remove('hidden', 'error');
-
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.placeholder = 'Escribe tu nombre...';
-    input.style.cssText = 'background:var(--bg-card);border:1px solid var(--accent);border-radius:8px;padding:10px 14px;color:var(--text-primary);font-size:14px;width:200px;outline:none;';
-
-    const botones = document.createElement('div');
-    botones.style.cssText = 'display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;';
-
     usuarios.forEach(u => {
         const btn = document.createElement('button');
         btn.textContent = u;
-        btn.style.cssText = 'background:var(--accent-dim);color:var(--accent);border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;';
-        btn.onclick = () => { setUsuario(u); container.classList.add('hidden'); };
-        botones.appendChild(btn);
+        btn.style.cssText = 'background:var(--accent-dim);color:var(--accent);border:none;border-radius:6px;padding:6px 14px;font-size:13px;font-weight:700;cursor:pointer;transition:transform 0.2s';
+        btn.onclick = () => { setUsuario(u); modal.classList.add('hidden'); };
+        recientes.appendChild(btn);
     });
 
-    const confirmar = document.createElement('button');
-    confirmar.textContent = '✅ OK';
-    confirmar.style.cssText = 'background:var(--accent);color:#0f0f1a;border:none;border-radius:6px;padding:6px 16px;font-size:12px;font-weight:800;cursor:pointer;';
-    confirmar.onclick = () => {
+    const handleOk = () => {
         const val = input.value.trim();
-        if (val) { setUsuario(val); container.classList.add('hidden'); }
+        if (val) { setUsuario(val); modal.classList.add('hidden'); }
     };
 
-    container.innerHTML = '';
-    container.style.cssText = 'position:fixed;bottom:50%;left:50%;transform:translate(-50%,50%);background:var(--bg-secondary);padding:20px;border-radius:16px;z-index:999;box-shadow:0 20px 60px rgba(0,0,0,0.8);border:1px solid rgba(232,168,56,0.2);display:flex;flex-direction:column;align-items:center;gap:8px;width:260px;';
-    container.innerHTML = '<div style="font-size:14px;font-weight:700;margin-bottom:4px">👤 ¿Quién eres?</div>';
-    container.appendChild(input);
-    container.appendChild(botones);
-    container.appendChild(confirmar);
-    input.focus();
-    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') confirmar.click(); });
+    confirmar.onclick = handleOk;
+    input.onkeydown = (e) => { if (e.key === 'Enter') handleOk(); };
+    modal.classList.remove('hidden');
+    setTimeout(() => input.focus(), 300);
 }
 
 // ============================================================

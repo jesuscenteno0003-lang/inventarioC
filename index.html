@@ -272,6 +272,16 @@
             </div>
         </div>
 
+        <!-- User Modal -->
+        <div id="modal-usuario" class="modal hidden">
+            <div class="modal-content" style="padding:24px;text-align:center">
+                <h2 style="font-size:18px;margin-bottom:16px">👤 ¿Quién eres?</h2>
+                <input type="text" id="input-usuario" placeholder="Escribe tu nombre..." style="width:100%;background:var(--bg-card);border:1px solid rgba(232,168,56,0.2);border-radius:10px;padding:12px 15px;color:var(--text-primary);font-size:14px;outline:none;margin-bottom:12px">
+                <div id="usuarios-recientes" style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-bottom:16px"></div>
+                <button id="btn-confirmar-usuario" class="btn-primary" style="width:100%">OK</button>
+            </div>
+        </div>
+
         <!-- Toast Notification -->
         <div id="toast" class="toast hidden"></div>
     </div>
