@@ -533,6 +533,7 @@ function setupEventListeners() {
     });
 
     document.getElementById('btn-export-produccion').addEventListener('click', exportarProduccion);
+    document.getElementById('btn-pdf-produccion').addEventListener('click', generarPDFProyectado);
     document.getElementById('btn-add-producto').addEventListener('click', () => {
         document.getElementById('modal-producto-title').textContent = 'Nuevo Producto';
         document.getElementById('form-producto').reset();
@@ -1122,6 +1123,158 @@ async function exportarProduccion() {
     a.download = `produccion_${areaActual.toLowerCase()}_${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
     showToast('Plan de producción exportado 📋');
+}
+
+async function generarPDFProyectado() {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+
+    const productos = await sb('productos', 'GET', null, `?select=*&area=eq.${areaActual}`);
+    if (!productos || !productos.length) { showToast('No hay productos en esta área', true); return; }
+
+    const productIds = productos.map(p => p.id);
+    const todosMov = await sb('movimientos', 'GET', null, '?select=producto_id,tipo,cantidad,fecha&limit=500&order=fecha.desc');
+    const movimientos = todosMov ? todosMov.filter(m => productIds.includes(m.producto_id)) : [];
+
+    const consumo = {};
+    const hace14dias = new Date(); hace14dias.setDate(hace14dias.getDate() - 14);
+    const hace7dias = new Date(); hace7dias.setDate(hace7dias.getDate() - 7);
+    if (movimientos) {
+        movimientos.forEach(m => {
+            if (m.tipo === 'Salida' && m.producto_id) {
+                if (!consumo[m.producto_id]) consumo[m.producto_id] = { semana: 0, quincena: 0 };
+                const f = new Date(m.fecha);
+                if (f >= hace14dias) consumo[m.producto_id].quincena += parseFloat(m.cantidad) || 0;
+                if (f >= hace7dias) consumo[m.producto_id].semana += parseFloat(m.cantidad) || 0;
+            }
+        });
+    }
+
+    const plan = productos.map(p => {
+        const c = consumo[p.id] || { semana: 0, quincena: 0 };
+        const consumoDiario = c.quincena > 0 ? c.quincena / 14 : 0.5;
+        const stock = parseFloat(p.stock_actual) || 0;
+        const min = parseFloat(p.stock_minimo) || 0;
+        const diasRestantes = consumoDiario > 0 ? stock / consumoDiario : 99;
+        const porcentajeStock = min > 0 ? (stock / min) * 100 : 100;
+
+        let prioridad, diaSugerido, sugerido;
+        if (stock <= min || diasRestantes <= 3) {
+            prioridad = 'alta';
+            diaSugerido = stock <= 0 ? 'URGENTE' : 'Lunes';
+            sugerido = Math.ceil(Math.max(min * 2 - stock, consumoDiario * 7));
+        } else if (porcentajeStock < 150 || diasRestantes <= 7) {
+            prioridad = 'media';
+            diaSugerido = 'Miércoles';
+            sugerido = Math.ceil(Math.max(min * 2 - stock, consumoDiario * 7));
+        } else if (c.semana > 0 && porcentajeStock < 250) {
+            prioridad = 'baja';
+            diaSugerido = 'Viernes';
+            sugerido = Math.ceil(consumoDiario * 7);
+        } else {
+            prioridad = 'ninguna';
+            diaSugerido = '';
+            sugerido = 0;
+        }
+        return { nombre: p.nombre, stock, min, unidad: p.unidad, categoria: p.categoria, prioridad, diaSugerido, sugerido };
+    }).filter(p => p.prioridad !== 'ninguna')
+      .sort((a, b) => ({ alta: 0, media: 1, baja: 2 }[a.prioridad] || 99) - ({ alta: 0, media: 1, baja: 2 }[b.prioridad] || 99));
+
+    if (!plan.length) { showToast('No hay productos que requieran producción', true); return; }
+
+    const dias = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+    const hoy = new Date();
+    const lunes = new Date(hoy);
+    lunes.setDate(hoy.getDate() - ((hoy.getDay() + 6) % 7));
+
+    const diasConFecha = dias.map((d, i) => {
+        const fecha = new Date(lunes);
+        fecha.setDate(lunes.getDate() + i);
+        return `${d} ${fecha.getDate()}/${fecha.getMonth() + 1}`;
+    });
+
+    const agrupado = {};
+    plan.forEach(p => {
+        const d = p.diaSugerido === 'URGENTE' ? 'URGENTE' : p.diaSugerido;
+        if (!agrupado[d]) agrupado[d] = [];
+        agrupado[d].push(`${p.nombre} (${p.sugerido} ${p.unidad})`);
+    });
+
+    const maxRows = Math.max(...Object.values(agrupado).map(a => a.length), 1);
+    const body = [];
+    for (let i = 0; i < maxRows; i++) {
+        const row = [];
+        diasConFecha.forEach((_, idx) => {
+            const d = dias[idx];
+            const items = agrupado[d] || [];
+            row.push(i < items.length ? items[i] : '');
+        });
+        body.push(row);
+    }
+
+    // Header con título
+    doc.setFontSize(14);
+    doc.setTextColor(232, 168, 56);
+    const semanaStr = `${diasConFecha[0]} al ${diasConFecha[5]}`;
+    doc.text(`Proyectado de la semana ${areaActual}`, 148, 15, { align: 'center' });
+    doc.setFontSize(9);
+    doc.setTextColor(136, 136, 170);
+    doc.text(semanaStr, 148, 21, { align: 'center' });
+
+    const colWidth = 36;
+    const startX = 10;
+    const startY = 28;
+
+    doc.setFontSize(8);
+    diasConFecha.forEach((d, i) => {
+        const x = startX + i * colWidth;
+        doc.setFillColor(232, 168, 56);
+        doc.setTextColor(15, 15, 26);
+        doc.setFont('helvetica', 'bold');
+        doc.rect(x, startY, colWidth, 8, 'F');
+        doc.text(d, x + colWidth / 2, startY + 5.5, { align: 'center' });
+    });
+
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(220, 220, 230);
+    body.forEach((row, ri) => {
+        row.forEach((cell, ci) => {
+            if (!cell) return;
+            const x = startX + ci * colWidth;
+            const y = startY + 9 + ri * 6;
+            const lines = doc.splitTextToSize(cell, colWidth - 4);
+            doc.setFontSize(7);
+            doc.text(lines, x + 2, y);
+        });
+    });
+
+    // Si hay URGENTEs, agregar sección
+    if (agrupado['URGENTE'] && agrupado['URGENTE'].length) {
+        const urgY = startY + 9 + body.length * 6 + 10;
+        doc.setFontSize(11);
+        doc.setTextColor(231, 76, 60);
+        doc.setFont('helvetica', 'bold');
+        doc.text('🔴 URGENTE - Reponer hoy:', 10, urgY);
+        doc.setFontSize(8);
+        doc.setTextColor(220, 220, 230);
+        doc.setFont('helvetica', 'normal');
+        agrupado['URGENTE'].forEach((item, i) => {
+            doc.text(`  • ${item}`, 14, urgY + 5 + i * 5);
+        });
+    }
+
+    // Footer con detalle
+    const detY = startY + 9 + body.length * 6 + (agrupado['URGENTE'] ? agrupado['URGENTE'].length * 5 + 20 : 15);
+    doc.setFontSize(7);
+    doc.setTextColor(136, 136, 170);
+    doc.text(`Generado: ${new Date().toLocaleString('es-CL')} · ${areaActual} · ${usuarioActual || 'Anónimo'}`, 148, detY, { align: 'center' });
+
+    const pdfBlob = doc.output('blob');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(pdfBlob);
+    a.download = `proyectado_semana_${areaActual.toLowerCase()}_${new Date().toISOString().split('T')[0]}.pdf`;
+    a.click();
+    showToast('PDF generado ✅');
 }
 
 // ============================================================
