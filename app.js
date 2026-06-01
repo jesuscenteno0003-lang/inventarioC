@@ -556,6 +556,8 @@ function setupEventListeners() {
         document.getElementById('modal-movimiento').classList.remove('hidden');
     });
 
+    document.getElementById('btn-clear-movimientos').addEventListener('click', limpiarMovimientos);
+
     document.getElementById('form-producto').addEventListener('submit', guardarProducto);
     document.getElementById('form-movimiento').addEventListener('submit', guardarMovimiento);
     document.getElementById('form-transferencia').addEventListener('submit', guardarTransferencia);
@@ -848,6 +850,28 @@ async function eliminarMovimiento(movId, prodId, tipo, cantidad) {
         await actualizarChart();
         await actualizarProduccion();
         showToast('Movimiento revertido'); reproducirConfirmacion();
+    } catch (err) {
+        showToast('Error: ' + err.message, true);
+    }
+}
+
+async function limpiarMovimientos() {
+    if (!confirm('¿Eliminar TODOS los movimientos del área actual? Los stocks NO se revertirán.')) return;
+    if (!confirm('¿Estás seguro? Esta acción no se puede deshacer.')) return;
+    try {
+        const productos = await sb('productos', 'GET', null, `?select=id&area=eq.${areaActual}&limit=5000`);
+        if (!productos || !productos.length) return;
+        const ids = productos.map(p => p.id);
+        for (const pid of ids) {
+            await sb('movimientos', 'DELETE', null, `?producto_id=eq.${pid}`);
+        }
+        await cargarMovimientos();
+        await cargarProductos();
+        await actualizarDashboard();
+        await actualizarAlertas();
+        await actualizarChart();
+        await actualizarProduccion();
+        showToast('Movimientos eliminados'); reproducirConfirmacion();
     } catch (err) {
         showToast('Error: ' + err.message, true);
     }
