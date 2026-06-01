@@ -194,7 +194,7 @@
                     <div class="form-row">
                         <div class="form-group">
                             <label>Cantidad</label>
-                            <input type="number" id="transfer-cantidad" step="0.1" min="0.1" required>
+                            <input type="number" id="transfer-cantidad" step="any" min="0.1" required>
                         </div>
                         <div class="form-group">
                             <label>Destino</label>
@@ -272,11 +272,9 @@
                     <div class="form-row">
                         <div class="form-group">
                             <label>Stock Mínimo</label>
-                            <input type="number" id="producto-stock-min" step="0.1" min="0" value="5">
-                        </div>
-                        <div class="form-group">
-                            <label>Stock Actual</label>
-                            <input type="number" id="producto-stock-act" step="0.1" min="0" value="0">
+                            <input type="number" id="producto-stock-min" step="any" min="0" value="5">
+
+                            <input type="number" id="producto-stock-act" step="any" min="0" value="0">
                         </div>
                     </div>
                     <div class="form-actions">
@@ -309,7 +307,7 @@
                         </div>
                         <div class="form-group">
                             <label>Cantidad *</label>
-                            <input type="number" id="movimiento-cantidad" step="0.1" min="0.1" required>
+                            <input type="number" id="movimiento-cantidad" step="any" min="0.1" required>
                         </div>
                     </div>
                     <div class="form-group">
