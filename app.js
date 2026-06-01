@@ -266,7 +266,7 @@ function reproducirAlarma() {
 }
 
 // Recordatorios programados
-const HORARIOS_RECORDATORIO = ['08:00', '12:00', '16:30', '20:00', '23:00'];
+const HORARIOS_RECORDATORIO = ['12:00'];
 let recordatoriosHoy = new Set();
 
 function iniciarRecordatorios() {
