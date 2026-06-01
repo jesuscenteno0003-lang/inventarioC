@@ -265,6 +265,39 @@ function reproducirAlarma() {
     } catch (e) { /* fallback */ }
 }
 
+// Recordatorios programados
+const HORARIOS_RECORDATORIO = ['08:00', '12:00', '16:30', '20:00', '23:00'];
+let recordatoriosHoy = new Set();
+
+function iniciarRecordatorios() {
+    const ahora = new Date();
+    const hoy = ahora.toDateString();
+    const horaMin = String(ahora.getHours()).padStart(2,'0') + ':' + String(ahora.getMinutes()).padStart(2,'0');
+    HORARIOS_RECORDATORIO.forEach(h => {
+        if (h <= horaMin) recordatoriosHoy.add(hoy + h);
+    });
+}
+
+function verificarRecordatorios() {
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    const ahora = new Date();
+    const hoy = ahora.toDateString();
+    const horaMin = String(ahora.getHours()).padStart(2,'0') + ':' + String(ahora.getMinutes()).padStart(2,'0');
+    HORARIOS_RECORDATORIO.forEach(h => {
+        const key = hoy + h;
+        if (h === horaMin && !recordatoriosHoy.has(key)) {
+            recordatoriosHoy.add(key);
+            try {
+                new Notification('📋 Inventario', {
+                    body: 'Recuerda actualizar tus productos',
+                    tag: 'recordatorio-' + h,
+                    vibrate: [200, 100, 200]
+                });
+            } catch (e) {}
+        }
+    });
+}
+
 function reproducirConfirmacion() {
     try {
         if (navigator.vibrate) navigator.vibrate(50);
@@ -485,10 +518,12 @@ async function init() {
         await actualizarChart();
         await actualizarProduccion();
 
-        // Notificaciones periódicas cada 5 min
+        // Notificaciones periódicas cada 5 min + recordatorios
         await pedirPermisoNotificacion();
         await verificarStockBajoNotificar();
         setInterval(verificarStockBajoNotificar, 300000);
+        iniciarRecordatorios();
+        setInterval(verificarRecordatorios, 60000);
 
     } catch (error) {
         console.error('Error init:', error);
