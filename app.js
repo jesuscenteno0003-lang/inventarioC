@@ -5,6 +5,10 @@
 const SB_URL = 'https://nmrquawcyypsjvmiwond.supabase.co';
 const SB_KEY = 'sb_publishable_iTgqTzfSyjkC4g85-UrubA_GGMp3RDy';
 
+function esc(str) { const d = document.createElement('div'); d.textContent = str; return d.innerHTML; }
+
+let toastTimeout = null;
+
 let chartConsumo = null;
 let areaActual = localStorage.getItem('areaActual') || 'Calientes';
 let usuarioActual = localStorage.getItem('usuarioActual') || '';
@@ -100,8 +104,8 @@ function initChart() {
 async function actualizarChart() {
     if (!chartConsumo) return;
 
-    const idsArea = (await sb('productos', 'GET', null, `?select=id&area=eq.${areaActual}`) || []).map(p => p.id);
-    const todosMov = await sb('movimientos', 'GET', null, '?select=tipo,cantidad,fecha,producto_id&limit=500');
+    const idsArea = (await sb('productos', 'GET', null, `?select=id&area=eq.${areaActual}&limit=5000`) || []).map(p => p.id);
+    const todosMov = await sb('movimientos', 'GET', null, '?select=tipo,cantidad,fecha,producto_id&limit=5000');
     const movimientos = todosMov ? todosMov.filter(m => idsArea.includes(m.producto_id)) : [];
     if (movimientos.length === 0) return;
 
@@ -433,7 +437,7 @@ function editarUsuario(id) {
         sb('usuarios', 'PATCH', { nombre: u.nombre }, `?id=eq.${id}`).then(() => {
             renderAdminUsuarios();
             showToast('Usuario actualizado');
-        });
+        }).catch(err => showToast('Error: ' + err.message, true));
     }
 }
 
@@ -443,7 +447,7 @@ function eliminarUsuario(id) {
         usuariosEditando = usuariosEditando.filter(x => x.id !== id);
         renderAdminUsuarios();
         showToast('Usuario eliminado');
-    });
+    }).catch(err => showToast('Error: ' + err.message, true));
 }
 
 // Inicializar audio context en el primer toque (necesario en iOS)
@@ -455,8 +459,7 @@ document.addEventListener('touchstart', () => { getAudioCtx(); }, { once: true }
 // ============================================================
 async function init() {
     try {
-        const test = await sb('productos', 'GET', null, '?select=id&limit=1');
-        console.log('Conexión OK, productos:', test);
+        await sb('productos', 'GET', null, '?select=id&limit=1');
 
         document.getElementById('splash').classList.add('hidden');
         document.getElementById('app').classList.remove('hidden');
@@ -584,7 +587,7 @@ function setupEventListeners() {
 // Dashboard
 // ============================================================
 async function actualizarDashboard() {
-    const productos = await sb('productos', 'GET', null, `?select=*&area=eq.${areaActual}`);
+    const productos = await sb('productos', 'GET', null, `?select=*&area=eq.${areaActual}&limit=5000`);
     if (!productos) return;
 
     const total = productos.length;
@@ -658,18 +661,18 @@ async function cargarProductos(search = '', categoria = '') {
                 <div class="producto-card ${esBajo ? 'stock-bajo' : 'stock-ok'}">
                     <div class="producto-body" data-id="${p.id}">
                         <div class="producto-info">
-                            <div class="producto-name">${p.nombre}</div>
-                            <div class="producto-detail">${p.categoria} | ${p.unidad} | Mín: ${p.stock_minimo}</div>
-                            ${p.notas ? `<div class="producto-notas">${p.notas.replace(/Creado por:/g, '👤')}</div>` : ''}
+                            <div class="producto-name">${esc(p.nombre)}</div>
+                            <div class="producto-detail">${esc(p.categoria)} | ${esc(p.unidad)} | Mín: ${p.stock_minimo}</div>
+                            ${p.notas ? `<div class="producto-notas">${esc(p.notas).replace(/Creado por:/g, '👤')}</div>` : ''}
                         </div>
                         <div class="producto-stock">
                             <div class="producto-stock-value" style="color: ${esBajo ? 'var(--red)' : 'var(--green)'}">${p.stock_actual}</div>
-                            <div class="producto-stock-min">${p.unidad}</div>
+                            <div class="producto-stock-min">${esc(p.unidad)}</div>
                         </div>
                     </div>
                     <div class="producto-actions">
                         <button class="btn-edit" data-id="${p.id}">✏️</button>
-                        <button class="btn-delete" data-id="${p.id}" data-nombre="${p.nombre.replace(/'/g, '')}">🗑️</button>
+                        <button class="btn-delete" data-id="${p.id}" data-nombre="${esc(p.nombre).replace(/'/g, '')}">🗑️</button>
                     </div>
                 </div>`;
         });
@@ -733,15 +736,14 @@ async function editarProducto(id) {
 }
 
 async function eliminarProducto(id, nombre) {
-    if (!confirm(`¿Eliminar "${nombre}"?`)) return;
-    await sb('movimientos', 'DELETE', null, `?producto_id=eq.${id}`);
+    if (!confirm(`¿Eliminar "${nombre}"? Se conservan los movimientos.`)) return;
     await sb('productos', 'DELETE', null, `?id=eq.${id}`);
     await cargarProductos();
     await actualizarDashboard();
     await actualizarAlertas();
     await actualizarChart();
     await actualizarProduccion();
-    showToast('Producto eliminado');
+    showToast('Producto eliminado (movimientos conservados)');
 }
 
 // ============================================================
@@ -763,7 +765,7 @@ async function cargarMovimientos(search = '') {
 
     let movimientos = [];
     if (todosMov) {
-        const idsArea = (await sb('productos', 'GET', null, `?select=id&area=eq.${areaActual}`) || []).map(p => p.id);
+        const idsArea = (await sb('productos', 'GET', null, `?select=id&area=eq.${areaActual}&limit=5000`) || []).map(p => p.id);
         movimientos = todosMov.filter(m => idsArea.includes(m.producto_id));
         if (search) movimientos = movimientos.filter(m => (m.productos?.nombre || '').toLowerCase().includes(search.toLowerCase()));
     }
@@ -855,7 +857,7 @@ async function eliminarMovimiento(movId, prodId, tipo, cantidad) {
 // Alertas
 // ============================================================
 async function actualizarAlertas() {
-    const todos = await sb('productos', 'GET', null, `?select=*&area=eq.${areaActual}`);
+    const todos = await sb('productos', 'GET', null, `?select=*&area=eq.${areaActual}&limit=5000`);
     if (!todos) return;
 
     const stockBajo = todos.filter(p => p.stock_actual <= p.stock_minimo).sort((a, b) => (a.stock_actual - a.stock_minimo) - (b.stock_actual - b.stock_minimo));
@@ -999,32 +1001,30 @@ async function actualizarProduccion() {
     const container = document.getElementById('produccion-list');
     if (!container) return;
 
-    const productos = await sb('productos', 'GET', null, `?select=*&area=eq.${areaActual}`);
+    const productos = await sb('productos', 'GET', null, `?select=*&area=eq.${areaActual}&limit=5000`);
     if (!productos || productos.length === 0) {
         container.innerHTML = '<div class="produccion-empty">📋 Selecciona un área para ver el plan de producción</div>';
         return;
     }
 
     const productIds = productos.map(p => p.id);
-    const todosMov = await sb('movimientos', 'GET', null, '?select=producto_id,tipo,cantidad,fecha&limit=500&order=fecha.desc');
+    const todosMov = await sb('movimientos', 'GET', null, '?select=producto_id,tipo,cantidad,fecha&limit=5000&order=fecha.desc');
     const movimientos = todosMov ? todosMov.filter(m => productIds.includes(m.producto_id)) : [];
 
     const consumo = {};
-    if (movimientos) {
-        const hace7dias = new Date();
-        hace7dias.setDate(hace7dias.getDate() - 7);
-        const hace14dias = new Date();
-        hace14dias.setDate(hace14dias.getDate() - 14);
+    const hace7dias = new Date();
+    hace7dias.setDate(hace7dias.getDate() - 7);
+    const hace14dias = new Date();
+    hace14dias.setDate(hace14dias.getDate() - 14);
 
-        movimientos.forEach(m => {
-            if (m.tipo === 'Salida' && m.producto_id) {
-                if (!consumo[m.producto_id]) consumo[m.producto_id] = { semana: 0, quincena: 0 };
-                const fecha = new Date(m.fecha);
-                if (fecha >= hace14dias) consumo[m.producto_id].quincena += parseFloat(m.cantidad) || 0;
-                if (fecha >= hace7dias) consumo[m.producto_id].semana += parseFloat(m.cantidad) || 0;
-            }
-        });
-    }
+    movimientos.forEach(m => {
+        if (m.tipo === 'Salida' && m.producto_id) {
+            if (!consumo[m.producto_id]) consumo[m.producto_id] = { semana: 0, quincena: 0 };
+            const fecha = new Date(m.fecha);
+            if (fecha >= hace14dias) consumo[m.producto_id].quincena += parseFloat(m.cantidad) || 0;
+            if (fecha >= hace7dias) consumo[m.producto_id].semana += parseFloat(m.cantidad) || 0;
+        }
+    });
 
     const plan = productos.map(p => {
         const c = consumo[p.id] || { semana: 0, quincena: 0 };
@@ -1110,24 +1110,22 @@ async function exportarProduccion() {
     const container = document.getElementById('produccion-list');
     if (!container) return;
 
-    const productos = await sb('productos', 'GET', null, `?select=*&area=eq.${areaActual}`);
+    const productos = await sb('productos', 'GET', null, `?select=*&area=eq.${areaActual}&limit=5000`);
     if (!productos) return;
 
     const productIds = productos.map(p => p.id);
-    const todosMov = await sb('movimientos', 'GET', null, '?select=producto_id,tipo,cantidad,fecha&limit=500&order=fecha.desc');
+    const todosMov = await sb('movimientos', 'GET', null, '?select=producto_id,tipo,cantidad,fecha&limit=5000&order=fecha.desc');
     const movimientos = todosMov ? todosMov.filter(m => productIds.includes(m.producto_id)) : [];
 
     const consumo = {};
-    if (movimientos) {
-        const hace14dias = new Date();
-        hace14dias.setDate(hace14dias.getDate() - 14);
-        movimientos.forEach(m => {
-            if (m.tipo === 'Salida' && m.producto_id && new Date(m.fecha) >= hace14dias) {
-                if (!consumo[m.producto_id]) consumo[m.producto_id] = 0;
-                consumo[m.producto_id] += parseFloat(m.cantidad) || 0;
-            }
-        });
-    }
+    const hace14dias = new Date();
+    hace14dias.setDate(hace14dias.getDate() - 14);
+    movimientos.forEach(m => {
+        if (m.tipo === 'Salida' && m.producto_id && new Date(m.fecha) >= hace14dias) {
+            if (!consumo[m.producto_id]) consumo[m.producto_id] = 0;
+            consumo[m.producto_id] += parseFloat(m.cantidad) || 0;
+        }
+    });
 
     const plan = productos.map(p => {
         const c = consumo[p.id] || 0;
@@ -1159,26 +1157,24 @@ async function generarPDFProyectado() {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
 
-    const productos = await sb('productos', 'GET', null, `?select=*&area=eq.${areaActual}`);
+    const productos = await sb('productos', 'GET', null, `?select=*&area=eq.${areaActual}&limit=5000`);
     if (!productos || !productos.length) { showToast('No hay productos en esta área', true); return; }
 
     const productIds = productos.map(p => p.id);
-    const todosMov = await sb('movimientos', 'GET', null, '?select=producto_id,tipo,cantidad,fecha&limit=500&order=fecha.desc');
+    const todosMov = await sb('movimientos', 'GET', null, '?select=producto_id,tipo,cantidad,fecha&limit=5000&order=fecha.desc');
     const movimientos = todosMov ? todosMov.filter(m => productIds.includes(m.producto_id)) : [];
 
     const consumo = {};
     const hace14dias = new Date(); hace14dias.setDate(hace14dias.getDate() - 14);
     const hace7dias = new Date(); hace7dias.setDate(hace7dias.getDate() - 7);
-    if (movimientos) {
-        movimientos.forEach(m => {
-            if (m.tipo === 'Salida' && m.producto_id) {
-                if (!consumo[m.producto_id]) consumo[m.producto_id] = { semana: 0, quincena: 0 };
-                const f = new Date(m.fecha);
-                if (f >= hace14dias) consumo[m.producto_id].quincena += parseFloat(m.cantidad) || 0;
-                if (f >= hace7dias) consumo[m.producto_id].semana += parseFloat(m.cantidad) || 0;
-            }
-        });
-    }
+    movimientos.forEach(m => {
+        if (m.tipo === 'Salida' && m.producto_id) {
+            if (!consumo[m.producto_id]) consumo[m.producto_id] = { semana: 0, quincena: 0 };
+            const f = new Date(m.fecha);
+            if (f >= hace14dias) consumo[m.producto_id].quincena += parseFloat(m.cantidad) || 0;
+            if (f >= hace7dias) consumo[m.producto_id].semana += parseFloat(m.cantidad) || 0;
+        }
+    });
 
     const plan = productos.map(p => {
         const c = consumo[p.id] || { semana: 0, quincena: 0 };
@@ -1311,8 +1307,8 @@ async function generarPDFProyectado() {
 // Exportar
 // ============================================================
 async function exportarDatos() {
-    const productos = await sb('productos', 'GET', null, `?select=*&area=eq.${areaActual}&order=categoria,nombre`);
-    const todosMov = await sb('movimientos', 'GET', null, '?select=*,productos(nombre,unidad)&order=id.desc');
+    const productos = await sb('productos', 'GET', null, `?select=*&area=eq.${areaActual}&order=categoria,nombre&limit=5000`);
+    const todosMov = await sb('movimientos', 'GET', null, '?select=*,productos(nombre,unidad)&order=id.desc&limit=5000');
     const idsArea = productos ? productos.map(p => p.id) : [];
     const movimientos = todosMov ? todosMov.filter(m => idsArea.includes(m.producto_id)) : [];
 
@@ -1335,9 +1331,10 @@ async function exportarDatos() {
 // ============================================================
 function showToast(message, isError = false) {
     const toast = document.getElementById('toast');
+    if (toastTimeout) clearTimeout(toastTimeout);
     toast.textContent = message;
     toast.className = isError ? 'toast error' : 'toast';
-    setTimeout(() => { toast.classList.add('hidden'); }, 3000);
+    toastTimeout = setTimeout(() => { toast.classList.add('hidden'); }, 3000);
 }
 
 // ============================================================
