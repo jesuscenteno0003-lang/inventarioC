@@ -288,8 +288,8 @@ function verificarRecordatorios() {
         if (h === horaMin && !recordatoriosHoy.has(key)) {
             recordatoriosHoy.add(key);
             try {
-                new Notification('📋 Inventario', {
-                    body: 'Recuerda actualizar tus productos',
+                new Notification('📋 Inventario Cocina', {
+                    body: 'Mantén tus productos actualizados para un mejor control. ¡Gracias por tu compromiso!',
                     tag: 'recordatorio-' + h,
                     vibrate: [200, 100, 200]
                 });
