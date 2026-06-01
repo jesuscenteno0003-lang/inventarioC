@@ -678,6 +678,18 @@ html, body {
 .movimiento-cantidad.entrada { color: var(--green); }
 .movimiento-cantidad.salida { color: var(--red); }
 
+.movimiento-delete {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 16px;
+    padding: 4px 6px;
+    border-radius: 6px;
+    transition: background 0.2s;
+    opacity: 0.5;
+}
+.movimiento-delete:hover { background: var(--red-dim); opacity: 1; }
+
 /* Modal */
 .modal {
     position: fixed;

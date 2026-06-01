@@ -532,6 +532,12 @@ function setupEventListeners() {
         if (body) mostrarChartProducto(parseInt(body.dataset.id));
     });
 
+    document.getElementById('movimientos-list').addEventListener('click', (e) => {
+        const btn = e.target.closest('.movimiento-delete');
+        if (!btn) return;
+        eliminarMovimiento(parseInt(btn.dataset.movId), parseInt(btn.dataset.prodId), btn.dataset.tipo, parseFloat(btn.dataset.cant));
+    });
+
     document.getElementById('btn-export-produccion').addEventListener('click', exportarProduccion);
     document.getElementById('btn-pdf-produccion').addEventListener('click', generarPDFProyectado);
     document.getElementById('btn-add-producto').addEventListener('click', () => {
@@ -686,11 +692,13 @@ async function guardarProducto(e) {
 
     try {
         if (id) {
-            const prev = await sb('productos', 'GET', null, `?id=eq.${id}&select=notas`);
+            const prev = await sb('productos', 'GET', null, `?id=eq.${id}&select=notas,stock_actual`);
             const prevNotas = prev?.[0]?.notas || '';
             const editLine = `Editado por: ${usuarioActual || 'Anónimo'} - ${new Date().toLocaleDateString('es-CL')}`;
             const nuevasNotas = prevNotas ? `${prevNotas} | ${editLine}` : editLine;
-            await sb('productos', 'PATCH', { nombre, unidad, stock_minimo: stockMin, categoria, area: areaActual, notas: nuevasNotas }, `?id=eq.${id}`);
+            const patchData = { nombre, unidad, stock_minimo: stockMin, categoria, area: areaActual, notas: nuevasNotas };
+            if (stockAct >= 0) patchData.stock_actual = stockAct;
+            await sb('productos', 'PATCH', patchData, `?id=eq.${id}`);
             showToast('Producto actualizado'); reproducirConfirmacion();
         } else {
             const notas = `Creado por: ${usuarioActual || 'Anónimo'} - ${new Date().toLocaleDateString('es-CL')}`;
@@ -775,6 +783,7 @@ async function cargarMovimientos(search = '') {
                         <div class="movimiento-detail">${m.fecha} · 👤 ${m.usuario || 'Anónimo'} ${m.observaciones ? '· ' + m.observaciones : ''}</div>
                     </div>
                     <div class="movimiento-cantidad ${esEntrada ? 'entrada' : 'salida'}">${esEntrada ? '+' : '-'}${m.cantidad} ${unidad}</div>
+                    <button class="movimiento-delete" data-mov-id="${m.id}" data-prod-id="${m.producto_id}" data-tipo="${m.tipo}" data-cant="${m.cantidad}">↩️</button>
                 </div>`;
         });
     } else {
@@ -816,6 +825,27 @@ async function guardarMovimiento(e) {
         await actualizarChart();
         await actualizarProduccion();
         showToast(`Movimiento registrado: ${tipo} de ${cantidad}`); reproducirConfirmacion();
+    } catch (err) {
+        showToast('Error: ' + err.message, true);
+    }
+}
+
+async function eliminarMovimiento(movId, prodId, tipo, cantidad) {
+    if (!confirm(`¿Revertir este movimiento? Se ajustará el stock de ${tipo === 'Entrada' ? 'restar' : 'sumar'} ${cantidad}.`)) return;
+    try {
+        const prod = await sb('productos', 'GET', null, `?id=eq.${prodId}&select=stock_actual`);
+        if (!prod || !prod.length) { showToast('Producto no encontrado', true); return; }
+        const ajuste = tipo === 'Entrada' ? -cantidad : cantidad;
+        const nuevoStock = prod[0].stock_actual + ajuste;
+        await sb('productos', 'PATCH', { stock_actual: nuevoStock }, `?id=eq.${prodId}`);
+        await sb('movimientos', 'DELETE', null, `?id=eq.${movId}`);
+        await cargarMovimientos();
+        await cargarProductos();
+        await actualizarDashboard();
+        await actualizarAlertas();
+        await actualizarChart();
+        await actualizarProduccion();
+        showToast('Movimiento revertido'); reproducirConfirmacion();
     } catch (err) {
         showToast('Error: ' + err.message, true);
     }
