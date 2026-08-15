@@ -2,8 +2,8 @@
 // Inventario Cocina - PWA con Supabase REST API directa
 // ============================================================
 
-const SB_URL = 'https://nmrquawcyypsjvmiwond.supabase.co';
-const SB_KEY = 'sb_publishable_iTgqTzfSyjkC4g85-UrubA_GGMp3RDy';
+const SB_URL = 'https://bxvfdgwsoyniteetubrc.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ4dmZkZ3dzb3luaXRlZXR1YnJjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY3NTIxNzEsImV4cCI6MjEwMjMyODE3MX0.55a0PubVui1jZRef-rHh45PRpRSJP44VZOkgFtSfJLw';
 
 function esc(str) { const d = document.createElement('div'); d.textContent = str; return d.innerHTML; }
 
