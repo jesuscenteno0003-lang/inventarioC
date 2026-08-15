@@ -1596,14 +1596,15 @@ function showUpdateModal() {
     const modal = document.createElement('div');
     modal.id = 'modal-update';
     modal.className = 'modal';
+    modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);backdrop-filter:blur(12px);display:flex;align-items:center;justify-content:center;z-index:9999;';
     modal.innerHTML = `
-        <div class="modal-content" style="padding:24px;text-align:center;max-width:340px;margin:0 auto;border-radius:24px;">
-            <div style="font-size:48px;margin-bottom:12px;">🔄</div>
-            <h2 style="font-size:18px;margin-bottom:8px;color:var(--accent);">Nueva versión disponible</h2>
-            <p style="font-size:13px;color:var(--text-secondary);margin-bottom:20px;">Hay una actualización lista. ¿Deseas instalarla ahora?</p>
-            <div style="display:flex;gap:10px;">
-                <button onclick="dismissUpdate()" style="flex:1;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:var(--text-primary);padding:12px;border-radius:12px;font-weight:600;cursor:pointer;font-size:14px;">Ahora no</button>
-                <button onclick="applyUpdate()" style="flex:1;background:var(--accent-gradient);border:none;color:#0a0a12;padding:12px;border-radius:12px;font-weight:700;cursor:pointer;font-size:14px;box-shadow:0 4px 16px rgba(232,168,56,0.3);">Actualizar</button>
+        <div class="modal-content" style="padding:32px;text-align:center;max-width:340px;margin:0 auto;border-radius:28px;background:linear-gradient(180deg, rgba(18,18,30,0.98) 0%, rgba(22,22,38,0.98) 100%);border:1px solid rgba(232,168,56,0.2);box-shadow:0 16px 48px rgba(0,0,0,0.6);">
+            <div style="font-size:56px;margin-bottom:16px;animation:float 2s ease-in-out infinite;">🔄</div>
+            <h2 style="font-size:20px;margin-bottom:8px;color:var(--accent);font-weight:800;">Nueva versión disponible</h2>
+            <p style="font-size:14px;color:var(--text-secondary);margin-bottom:24px;line-height:1.5;">Hay una actualización lista con mejoras y correcciones.<br>¿Deseas instalarla ahora?</p>
+            <div style="display:flex;gap:12px;">
+                <button onclick="dismissUpdate()" style="flex:1;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);color:var(--text-primary);padding:14px;border-radius:14px;font-weight:600;cursor:pointer;font-size:14px;transition:all 0.2s;">Ahora no</button>
+                <button onclick="applyUpdate()" style="flex:1;background:var(--accent-gradient);border:none;color:#0a0a12;padding:14px;border-radius:14px;font-weight:700;cursor:pointer;font-size:14px;box-shadow:0 4px 20px rgba(232,168,56,0.4);transition:all 0.2s;">Actualizar</button>
             </div>
         </div>
     `;
