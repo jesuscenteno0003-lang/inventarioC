@@ -2,7 +2,7 @@
     "name": "Inventario Cocina Zerrano",
     "short_name": "Inv Zerrano",
     "description": "Inventario de cocina para restaurante Zerrano",
-    "start_url": "/",
+    "start_url": "/inventarioC/",
     "display": "standalone",
     "background_color": "#0f0f1a",
     "theme_color": "#e8a838",
