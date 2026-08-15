@@ -462,7 +462,7 @@ html, body {
     display: flex;
     gap: 8px;
     margin-bottom: 12px;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
 }
 
 .search-bar input {
@@ -492,6 +492,27 @@ html, body {
     white-space: nowrap;
     padding: 12px 14px;
     font-size: 13px;
+}
+
+@media (max-width: 480px) {
+    .search-bar {
+        gap: 6px;
+    }
+    .search-bar input {
+        flex: 1 1 100%;
+        order: 1;
+    }
+    .search-bar .btn-primary {
+        order: 2;
+        flex: 1;
+        padding: 10px 12px;
+        font-size: 12px;
+    }
+    .search-bar .btn-danger {
+        order: 3;
+        padding: 10px 10px;
+        font-size: 11px;
+    }
 }
 
 .filter-bar {
