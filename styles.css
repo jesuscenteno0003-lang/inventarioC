@@ -592,6 +592,26 @@ html, body {
     transform: scale(0.96);
 }
 
+.btn-danger {
+    background: var(--red-dim);
+    color: var(--red);
+    border: none;
+    border-radius: var(--radius-sm);
+    padding: 14px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.btn-danger:hover {
+    background: rgba(248, 113, 113, 0.2);
+}
+
+.btn-danger:active {
+    transform: scale(0.96);
+}
+
 /* Products List */
 .productos-list, .movimientos-list {
     display: flex;
