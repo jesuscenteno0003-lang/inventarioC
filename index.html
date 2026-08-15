@@ -35,6 +35,7 @@
         <header class="header">
             <h1>Inv · <span id="header-area">Calientes</span></h1>
             <div class="header-actions">
+                <button id="btn-settings" class="btn-icon" onclick="openSettings()" title="Configuración">⚙️</button>
                 <button id="btn-notify" class="btn-icon" title="Notificaciones">🔔</button>
                 <button id="btn-sync" class="btn-icon" title="Sincronizar">🔄</button>
                 <button id="btn-export" class="btn-icon" title="Exportar">📤</button>
@@ -363,10 +364,67 @@
             </div>
         </div>
 
+        <!-- Settings Modal -->
+        <div id="modal-settings" class="modal hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>⚙️ Configuración</h2>
+                    <button class="btn-close" data-close="modal-settings">&times;</button>
+                </div>
+                <div style="padding:20px;">
+                    <div class="settings-group">
+                        <h3 class="settings-title">🔊 Sonido de notificación</h3>
+                        <p class="settings-desc">Selecciona el tono cuando haya stock bajo</p>
+                        <div class="settings-options" id="sound-options">
+                            <button class="sound-option" data-sound="pop" onclick="previewSound('pop')">
+                                <span class="sound-icon">🔔</span>
+                                <span>Pop</span>
+                            </button>
+                            <button class="sound-option" data-sound="chime" onclick="previewSound('chime')">
+                                <span class="sound-icon">🎵</span>
+                                <span>Chime</span>
+                            </button>
+                            <button class="sound-option" data-sound="bell" onclick="previewSound('bell')">
+                                <span class="sound-icon">🛎️</span>
+                                <span>Bell</span>
+                            </button>
+                            <button class="sound-option" data-sound="digital" onclick="previewSound('digital')">
+                                <span class="sound-icon">📱</span>
+                                <span>Digital</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="settings-group">
+                        <h3 class="settings-title">📳 Vibración</h3>
+                        <p class="settings-desc">Vibrar al recibir notificaciones</p>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="setting-vibration" onchange="saveSettings()">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+
+                    <div class="settings-group">
+                        <h3 class="settings-title">🔊 Sonido de toque</h3>
+                        <p class="settings-desc">Sonido suave al tocar botones</p>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="setting-touch-sound" onchange="saveSettings()">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+
+                    <div class="settings-group">
+                        <h3 class="settings-title">ℹ️ Versión</h3>
+                        <p class="settings-desc">Inventario Cocina v2.0</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Toast Notification -->
         <div id="toast" class="toast hidden"></div>
     </div>
 
-    <script src="app.js?v=8"></script>
+    <script src="app.js?v=12"></script>
 </body>
 </html>

@@ -248,43 +248,14 @@ function getAudioCtx() {
     return audioCtx;
 }
 
-// Sonido moderno de notificación (tipo "pop" suave)
+// Sonido moderno de notificación (usa configuración)
 function reproducirAlarma() {
-    try {
-        if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
-        const ctx = getAudioCtx();
-        const now = ctx.currentTime;
-        
-        // Primer tono
-        const osc1 = ctx.createOscillator();
-        const gain1 = ctx.createGain();
-        osc1.type = 'sine';
-        osc1.frequency.setValueAtTime(800, now);
-        osc1.frequency.exponentialRampToValueAtTime(1200, now + 0.08);
-        gain1.gain.setValueAtTime(0.15, now);
-        gain1.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
-        osc1.connect(gain1);
-        gain1.connect(ctx.destination);
-        osc1.start(now);
-        osc1.stop(now + 0.15);
-        
-        // Segundo tono (más agudo)
-        const osc2 = ctx.createOscillator();
-        const gain2 = ctx.createGain();
-        osc2.type = 'sine';
-        osc2.frequency.setValueAtTime(1000, now + 0.1);
-        osc2.frequency.exponentialRampToValueAtTime(1400, now + 0.18);
-        gain2.gain.setValueAtTime(0.12, now + 0.1);
-        gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
-        osc2.connect(gain2);
-        gain2.connect(ctx.destination);
-        osc2.start(now + 0.1);
-        osc2.stop(now + 0.25);
-    } catch (e) { /* fallback */ }
+    reproducirAlarmaConfigurada();
 }
 
 // Sonido de toque suave (para interacciones)
 function reproducirToque() {
+    if (!settings.touchSound) return;
     try {
         const ctx = getAudioCtx();
         const now = ctx.currentTime;
@@ -293,7 +264,7 @@ function reproducirToque() {
         osc.type = 'sine';
         osc.frequency.setValueAtTime(600, now);
         osc.frequency.exponentialRampToValueAtTime(400, now + 0.05);
-        gain.gain.setValueAtTime(0.06, now);
+        gain.gain.setValueAtTime(0.04, now);
         gain.gain.exponentialRampToValueAtTime(0.01, now + 0.06);
         osc.connect(gain);
         gain.connect(ctx.destination);
@@ -543,6 +514,7 @@ document.addEventListener('touchstart', () => { getAudioCtx(); }, { once: true }
 // ============================================================
 async function init() {
     try {
+        loadSettings();
         await sb('productos', 'GET', null, '?select=id&limit=1');
 
         document.getElementById('splash').classList.add('hidden');
@@ -1445,6 +1417,158 @@ function showToast(message, isError = false) {
     toast.textContent = message;
     toast.className = isError ? 'toast error' : 'toast';
     toastTimeout = setTimeout(() => { toast.classList.add('hidden'); }, 3000);
+}
+
+// ============================================================
+// Settings
+// ============================================================
+let settings = {
+    soundType: 'pop',
+    vibration: true,
+    touchSound: true
+};
+
+function loadSettings() {
+    const saved = localStorage.getItem('appSettings');
+    if (saved) {
+        settings = { ...settings, ...JSON.parse(saved) };
+    }
+    applySettings();
+}
+
+function applySettings() {
+    // Apply sound type selection
+    document.querySelectorAll('.sound-option').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.sound === settings.soundType);
+    });
+    
+    // Apply toggles
+    const vibrationToggle = document.getElementById('setting-vibration');
+    const touchSoundToggle = document.getElementById('setting-touch-sound');
+    if (vibrationToggle) vibrationToggle.checked = settings.vibration;
+    if (touchSoundToggle) touchSoundToggle.checked = settings.touchSound;
+}
+
+function saveSettings() {
+    settings.soundType = document.querySelector('.sound-option.active')?.dataset.sound || 'pop';
+    settings.vibration = document.getElementById('setting-vibration')?.checked ?? true;
+    settings.touchSound = document.getElementById('setting-touch-sound')?.checked ?? true;
+    localStorage.setItem('appSettings', JSON.stringify(settings));
+    showToast('Configuración guardada');
+}
+
+function openSettings() {
+    loadSettings();
+    document.getElementById('modal-settings').classList.remove('hidden');
+}
+
+// Sound previews
+function previewSound(type) {
+    document.querySelectorAll('.sound-option').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.sound === type);
+    });
+    
+    const ctx = getAudioCtx();
+    const now = ctx.currentTime;
+    
+    switch(type) {
+        case 'pop':
+            playPopSound(ctx, now);
+            break;
+        case 'chime':
+            playChimeSound(ctx, now);
+            break;
+        case 'bell':
+            playBellSound(ctx, now);
+            break;
+        case 'digital':
+            playDigitalSound(ctx, now);
+            break;
+    }
+}
+
+function playPopSound(ctx, now) {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(800, now);
+    osc.frequency.exponentialRampToValueAtTime(1200, now + 0.08);
+    gain.gain.setValueAtTime(0.15, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.15);
+}
+
+function playChimeSound(ctx, now) {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(523, now);
+    osc.frequency.setValueAtTime(659, now + 0.08);
+    osc.frequency.setValueAtTime(784, now + 0.16);
+    gain.gain.setValueAtTime(0.1, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.25);
+}
+
+function playBellSound(ctx, now) {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(1200, now);
+    osc.frequency.exponentialRampToValueAtTime(800, now + 0.3);
+    gain.gain.setValueAtTime(0.12, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.4);
+}
+
+function playDigitalSound(ctx, now) {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(1000, now);
+    osc.frequency.setValueAtTime(800, now + 0.05);
+    osc.frequency.setValueAtTime(1000, now + 0.1);
+    gain.gain.setValueAtTime(0.08, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.15);
+}
+
+// Play selected alarm sound
+function reproducirAlarmaConfigurada() {
+    if (!settings.touchSound) return;
+    const ctx = getAudioCtx();
+    const now = ctx.currentTime;
+    
+    switch(settings.soundType) {
+        case 'pop':
+            playPopSound(ctx, now);
+            break;
+        case 'chime':
+            playChimeSound(ctx, now);
+            break;
+        case 'bell':
+            playBellSound(ctx, now);
+            break;
+        case 'digital':
+            playDigitalSound(ctx, now);
+            break;
+    }
+    
+    if (settings.vibration && navigator.vibrate) {
+        navigator.vibrate([100, 50, 100]);
+    }
 }
 
 // ============================================================
