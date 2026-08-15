@@ -460,16 +460,18 @@ html, body {
 /* Search & Filter Bar */
 .search-bar {
     display: flex;
-    gap: 10px;
+    gap: 8px;
     margin-bottom: 12px;
+    flex-wrap: nowrap;
 }
 
 .search-bar input {
     flex: 1;
+    min-width: 0;
     background: var(--bg-card);
     border: 1px solid rgba(232, 168, 56, 0.15);
     border-radius: var(--radius-sm);
-    padding: 12px 15px;
+    padding: 12px 12px;
     color: var(--text-primary);
     font-size: 14px;
     transition: border-color 0.3s;
@@ -482,6 +484,14 @@ html, body {
 
 .search-bar input::placeholder {
     color: var(--text-secondary);
+}
+
+.search-bar .btn-primary,
+.search-bar .btn-danger {
+    flex-shrink: 0;
+    white-space: nowrap;
+    padding: 12px 14px;
+    font-size: 13px;
 }
 
 .filter-bar {
