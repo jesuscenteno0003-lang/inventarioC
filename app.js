@@ -1397,10 +1397,37 @@ function showToast(message, isError = false) {
 }
 
 // ============================================================
-// Service Worker
+// Service Worker & Update Notification
 // ============================================================
+let newWorker = null;
+
 if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
+    navigator.serviceWorker.register('sw.js').then(reg => {
+        reg.addEventListener('updatefound', () => {
+            newWorker = reg.installing;
+            newWorker.addEventListener('statechange', () => {
+                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                    showUpdateBanner();
+                }
+            });
+        });
+    }).catch(() => {});
+}
+
+function showUpdateBanner() {
+    if (document.getElementById('update-banner')) return;
+    const banner = document.createElement('div');
+    banner.id = 'update-banner';
+    banner.className = 'update-banner';
+    banner.innerHTML = '<span>🔄 Nueva versión disponible</span><button onclick="applyUpdate()">Actualizar</button>';
+    document.body.appendChild(banner);
+}
+
+function applyUpdate() {
+    if (newWorker) {
+        newWorker.postMessage({ type: 'SKIP_WAITING' });
+    }
+    window.location.reload();
 }
 
 // ============================================================
