@@ -1458,20 +1458,37 @@ if ('serviceWorker' in navigator) {
             newWorker = reg.installing;
             newWorker.addEventListener('statechange', () => {
                 if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                    showUpdateBanner();
+                    showUpdateModal();
                 }
             });
         });
     }).catch(() => {});
 }
 
-function showUpdateBanner() {
-    if (document.getElementById('update-banner')) return;
-    const banner = document.createElement('div');
-    banner.id = 'update-banner';
-    banner.className = 'update-banner';
-    banner.innerHTML = '<span>🔄 Nueva versión disponible</span><button onclick="applyUpdate()">Actualizar</button>';
-    document.body.appendChild(banner);
+function showUpdateModal() {
+    if (document.getElementById('modal-update')) return;
+    reproducirAlarma();
+    
+    const modal = document.createElement('div');
+    modal.id = 'modal-update';
+    modal.className = 'modal';
+    modal.innerHTML = `
+        <div class="modal-content" style="padding:24px;text-align:center;max-width:340px;margin:0 auto;border-radius:24px;">
+            <div style="font-size:48px;margin-bottom:12px;">🔄</div>
+            <h2 style="font-size:18px;margin-bottom:8px;color:var(--accent);">Nueva versión disponible</h2>
+            <p style="font-size:13px;color:var(--text-secondary);margin-bottom:20px;">Hay una actualización lista. ¿Deseas instalarla ahora?</p>
+            <div style="display:flex;gap:10px;">
+                <button onclick="dismissUpdate()" style="flex:1;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:var(--text-primary);padding:12px;border-radius:12px;font-weight:600;cursor:pointer;font-size:14px;">Ahora no</button>
+                <button onclick="applyUpdate()" style="flex:1;background:var(--accent-gradient);border:none;color:#0a0a12;padding:12px;border-radius:12px;font-weight:700;cursor:pointer;font-size:14px;box-shadow:0 4px 16px rgba(232,168,56,0.3);">Actualizar</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+}
+
+function dismissUpdate() {
+    const modal = document.getElementById('modal-update');
+    if (modal) modal.remove();
 }
 
 function applyUpdate() {
