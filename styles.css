@@ -466,7 +466,7 @@ html, body {
 }
 
 .search-bar input {
-    flex: 1;
+    flex: 1 1 100%;
     min-width: 0;
     background: var(--bg-card);
     border: 1px solid rgba(232, 168, 56, 0.15);
@@ -475,6 +475,7 @@ html, body {
     color: var(--text-primary);
     font-size: 14px;
     transition: border-color 0.3s;
+    order: 1;
 }
 
 .search-bar input:focus {
@@ -486,9 +487,18 @@ html, body {
     color: var(--text-secondary);
 }
 
+.search-bar .btn-primary {
+    order: 2;
+    flex: 1;
+}
+
+.search-bar .btn-danger {
+    order: 3;
+    flex-shrink: 0;
+}
+
 .search-bar .btn-primary,
 .search-bar .btn-danger {
-    flex-shrink: 0;
     white-space: nowrap;
     padding: 12px 14px;
     font-size: 13px;
@@ -498,18 +508,11 @@ html, body {
     .search-bar {
         gap: 6px;
     }
-    .search-bar input {
-        flex: 1 1 100%;
-        order: 1;
-    }
     .search-bar .btn-primary {
-        order: 2;
-        flex: 1;
         padding: 10px 12px;
         font-size: 12px;
     }
     .search-bar .btn-danger {
-        order: 3;
         padding: 10px 10px;
         font-size: 11px;
     }
