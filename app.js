@@ -248,22 +248,89 @@ function getAudioCtx() {
     return audioCtx;
 }
 
+// Sonido moderno de notificación (tipo "pop" suave)
 function reproducirAlarma() {
     try {
-        if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+        if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
         const ctx = getAudioCtx();
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'square';
-        osc.frequency.value = 880;
-        gain.gain.setValueAtTime(0.3, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start(ctx.currentTime);
-        osc.stop(ctx.currentTime + 0.5);
+        const now = ctx.currentTime;
+        
+        // Primer tono
+        const osc1 = ctx.createOscillator();
+        const gain1 = ctx.createGain();
+        osc1.type = 'sine';
+        osc1.frequency.setValueAtTime(800, now);
+        osc1.frequency.exponentialRampToValueAtTime(1200, now + 0.08);
+        gain1.gain.setValueAtTime(0.15, now);
+        gain1.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+        osc1.connect(gain1);
+        gain1.connect(ctx.destination);
+        osc1.start(now);
+        osc1.stop(now + 0.15);
+        
+        // Segundo tono (más agudo)
+        const osc2 = ctx.createOscillator();
+        const gain2 = ctx.createGain();
+        osc2.type = 'sine';
+        osc2.frequency.setValueAtTime(1000, now + 0.1);
+        osc2.frequency.exponentialRampToValueAtTime(1400, now + 0.18);
+        gain2.gain.setValueAtTime(0.12, now + 0.1);
+        gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+        osc2.connect(gain2);
+        gain2.connect(ctx.destination);
+        osc2.start(now + 0.1);
+        osc2.stop(now + 0.25);
     } catch (e) { /* fallback */ }
 }
+
+// Sonido de toque suave (para interacciones)
+function reproducirToque() {
+    try {
+        const ctx = getAudioCtx();
+        const now = ctx.currentTime;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(600, now);
+        osc.frequency.exponentialRampToValueAtTime(400, now + 0.05);
+        gain.gain.setValueAtTime(0.06, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.06);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.06);
+    } catch (e) { /* fallback */ }
+}
+
+// Sonido de confirmación moderno (tipo "chime")
+function reproducirConfirmacion() {
+    try {
+        if (navigator.vibrate) navigator.vibrate(30);
+        const ctx = getAudioCtx();
+        const now = ctx.currentTime;
+        
+        // Nota ascendente suave
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(523, now); // Do
+        osc.frequency.setValueAtTime(659, now + 0.08); // Mi
+        osc.frequency.setValueAtTime(784, now + 0.16); // Sol
+        gain.gain.setValueAtTime(0.1, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.25);
+    } catch (e) { /* fallback */ }
+}
+
+// Agregar sonido de toque a botones
+document.addEventListener('click', (e) => {
+    if (e.target.closest('button, .nav-btn, .area-btn, .btn-primary, .btn-secondary, .btn-icon')) {
+        reproducirToque();
+    }
+});
 
 // Recordatorios programados
 const HORARIOS_RECORDATORIO = ['12:00'];
@@ -287,32 +354,16 @@ function verificarRecordatorios() {
         const key = hoy + h;
         if (h === horaMin && !recordatoriosHoy.has(key)) {
             recordatoriosHoy.add(key);
+            reproducirAlarma();
             try {
                 new Notification('📋 Inventario Cocina', {
-                    body: 'Mantén tus productos actualizados para un mejor control. ¡Gracias por tu compromiso!',
+                    body: 'Mantén tus productos actualizados para un mejor control.',
                     tag: 'recordatorio-' + h,
-                    vibrate: [200, 100, 200]
+                    vibrate: [100, 50, 100]
                 });
             } catch (e) {}
         }
     });
-}
-
-function reproducirConfirmacion() {
-    try {
-        if (navigator.vibrate) navigator.vibrate(50);
-        const ctx = getAudioCtx();
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.value = 660;
-        gain.gain.setValueAtTime(0.2, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.15);
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start(ctx.currentTime);
-        osc.stop(ctx.currentTime + 0.15);
-    } catch (e) { /* fallback */ }
 }
 
 async function verificarStockBajoNotificar() {
